@@ -63,9 +63,9 @@ CIM PDF
 | 15 | Operating Income | `Operating_Income` | Nested: {value, source, formula, confidence} |
 | 18 | Adj. EBITDA | `Adj_EBITDA` | Multi-variant priority logic |
 | — | EBITDA (reported) | `EBITDA` | Reference field only — no Excel row, client reference |
-| 16-17 | 1X Adjustments | TODO | Next field |
-| 21 | Other expense/(income) | TODO | |
-| 23 | Depreciation | TODO | |
+| 21 | Other expense/(income) | `Other_Expense` | DONE — Rule 13; Chimera only (EBITDA adj table); null for other 3 |
+| 22 | Interest Expense | `Interest_Expense` | DONE — Rule 14; historical years only (YYYY_A); null all 4 test PDFs |
+| 23 | Depreciation | `Depreciation` | NEXT — Rule 15; historical + projected; Chimera has values; null for other 3 |
 
 **Type 2 — Formula (DO NOT overwrite):**
 - Growth Rate (row 8), GM% (row 11), Operating Income (row 15)
@@ -108,17 +108,31 @@ LLM must output period keys in this exact format:
 10. Operating Income: 4-step priority (extract → EBITDA-D&A → GP-OpEx → Rev-COGS-OpEx)
 11. Adj. EBITDA: priority Adj. EBITDA > PF Adj. EBITDA > plain EBITDA; CAD = no conversion
 12. EBITDA (reported): plain/reported EBITDA only — NEVER use Adj. EBITDA; null if only adjusted exists
+13. Other_Expense: only if explicitly labeled; no bundled-interest rows; sign: parentheses=negative
+14. Interest_Expense: historical years (YYYY_A/TTM) ONLY — null for YYYY_E; no bundled rows; no balance sheet
+15. Depreciation: historical + projected both; standalone "Depreciation" or "D&A" row; NEVER derive; null if not found
 
 ---
 
 ## PDF Test Files & Known Patterns
 
-| PDF | EBITDA Label | Units | Notes |
-|-----|-------------|-------|-------|
-| Project Chimera (1).pdf | Reported EBITDA → Adjusted EBITDA | $000s | Page 55 P&L, page 60 adjustments |
-| Project Network_CIP_Atar Capital.pdf | EBITDA → PF Adjusted EBITDA | $M | No D&A line, Operating Income = null |
-| Project Palm_CIM_(Atar Capital).pdf | Adj. EBITDA (simple row) | $M | Page 71 |
-| Project Smores - CIM_2026 (Atar).pdf | Plain EBITDA only | CAD millions | CAD currency, FY suffix |
+| PDF | EBITDA Label | Units | Depreciation | Interest Expense |
+|-----|-------------|-------|-------------|-----------------|
+| Project Chimera (1).pdf | Reported EBITDA → Adjusted EBITDA | $000s | YES — standalone "Depreciation" row, page 55; 2022A–2028F | null (no P&L line) |
+| Project Network_CIP_Atar Capital.pdf | EBITDA → PF Adjusted EBITDA | $M | null (P&L stops at EBITDA) | null |
+| Project Palm_CIM_(Atar Capital).pdf | Adj. EBITDA (simple row) | $M | null (P&L stops at EBITDA) | null |
+| Project Smores - CIM_2026 (Atar).pdf | Plain EBITDA only | CAD millions | null (P&L stops at EBITDA) | null |
+
+### Depreciation Values — Project Chimera (verified, page 55, $000s)
+| Year | Value |
+|------|-------|
+| 2022_A | 2,559 |
+| 2023_A | 2,604 |
+| 2024_A | 2,438 |
+| 2025_A | 2,305 |
+| 2026_E | 2,063 |
+| 2027_E | 1,968 |
+| 2028_E | 1,872 |
 
 ---
 
@@ -131,9 +145,11 @@ LLM must output period keys in this exact format:
 | 3 | Operating Income (4-step logic) | DONE |
 | 4 | Adj. EBITDA (multi-variant logic) | DONE |
 | 5 | EBITDA reported/plain (reference field) | DONE |
-| 6 | 1X Adjustments | NEXT |
-| 6 | Depreciation + Other expense | TODO |
-| 7 | Excel writer | TODO |
+| 6 | Other expense/(income) — Rule 13 | DONE |
+| 7 | Interest Expense — Rule 14 (historical only) | DONE |
+| 8 | Depreciation — Rule 15 (hist + projected) | NEXT |
+| 9 | 1X Adjustments | TODO |
+| 10 | Excel writer | TODO |
 
 ---
 
