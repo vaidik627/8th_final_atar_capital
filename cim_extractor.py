@@ -111,6 +111,8 @@ class CIMParser:
                 "ebitda adjustments", "management adjustments",
                 "income statement", "financial performance",
                 "historical financials", "projected financials",
+                "other expense", "other income", "other (income)", "other income/expense",
+                "other income / expenses", "non-operating expense", "non-operating income",
             ]
             
         logging.info(f"Filtering content over {len(self.extracted_text)} text pages and {len(self.extracted_tables)} tables...")
@@ -383,7 +385,32 @@ class LLMExtractor:
             "     - Convert parentheses to negative: (1,200) = -1200.\n"
             "     - Normalise units to $000s. If CAD, output as-is without USD conversion.\n"
             "     - If a document only has Adjusted EBITDA and no plain EBITDA → output null for this field.\n"
-            "     - If a year has no plain/reported EBITDA → output null for that year."
+            "     - If a year has no plain/reported EBITDA → output null for that year.\n"
+            "13. OTHER EXPENSE / (INCOME) EXTRACTION LOGIC:\n"
+            "   This is the non-operating 'Other expense / (income)' line (Excel row 21).\n"
+            "   OUTPUT: flat numeric value per year. Use null if not found.\n\n"
+            "   EXTRACTION RULES:\n"
+            "     STEP 1 — Look for a row explicitly labeled one of (case-insensitive):\n"
+            "       a) 'Other expense / (income)' or 'Other (income) / expense'\n"
+            "       b) 'Other income / expenses' or 'Other income/expense'\n"
+            "       c) 'Other income, net' or 'Other expense, net'\n"
+            "       d) 'Non-operating expense' or 'Non-operating income'\n"
+            "       e) 'Other income (expense)' or 'Other expense (income)'\n"
+            "     STEP 2 — Also check EBITDA adjustment schedules: if a line explicitly labeled\n"
+            "       'Other Income / Expenses' or 'Other expense' appears inside the adjustment table, extract it.\n"
+            "   HARD RULES:\n"
+            "     - Extract ONLY if the row is explicitly labeled as above in a structured financial table.\n"
+            "     - NEVER extract if the label also includes 'interest' (e.g. 'Interest and other expense') —\n"
+            "       that is Interest Expense, not Other Expense.\n"
+            "     - NEVER derive or calculate this field from other lines.\n"
+            "     - NEVER extract from charts, dashboards, bullet points, or narrative text.\n"
+            "     - Sign convention: expense shown in parentheses = negative number.\n"
+            "       If shown as positive (no parentheses) in an expense section → keep positive.\n"
+            "     - Convert parentheses to negative: (1,296) = -1296.\n"
+            "     - Normalise units to $000s. If CAD, output as-is without USD conversion.\n"
+            "     - Extract ONLY for years where the value is explicitly stated in the table.\n"
+            "     - If the line is not present in the document → output null for all years.\n"
+            "     - If a year has no value in an otherwise present row → output null for that year."
         )
 
         user_prompt = (
@@ -401,8 +428,9 @@ class LLMExtractor:
             "    ...\n"
             "    NOTE: If a year has insufficient data → output null (not an object) for that year.\n"
             "  },\n"
-            "  \"Adj_EBITDA\": {\"2021_A\": value, \"2022_A\": value, \"2023_A\": value, \"2024_E\": value, ...},\n"
-            "  \"EBITDA\":     {\"2021_A\": value, \"2022_A\": value, \"2023_A\": value, \"2024_E\": value, ...}\n"
+            "  \"Adj_EBITDA\":     {\"2021_A\": value, \"2022_A\": value, \"2023_A\": value, \"2024_E\": value, ...},\n"
+            "  \"EBITDA\":         {\"2021_A\": value, \"2022_A\": value, \"2023_A\": value, \"2024_E\": value, ...},\n"
+            "  \"Other_Expense\":  {\"2021_A\": value, \"2022_A\": value, \"2023_A\": value, ...}\n"
             "}\n"
             "Include every period found in the document. Use null for any metric not found."
         )
@@ -485,7 +513,12 @@ def main():
             "6) EBITDA — Reported/plain EBITDA per year (BEFORE any adjustments). Follow Rule 12.\n"
             "   Only extract rows explicitly labeled 'Reported EBITDA', 'EBITDA' (no qualifier), or\n"
             "   'EBITDA before adjustments'. NEVER use Adjusted EBITDA for this field.\n"
-            "   Output null if only Adjusted EBITDA exists in the document.\n\n"
+            "   Output null if only Adjusted EBITDA exists in the document.\n"
+            "7) Other_Expense — Other expense / (income) per year. Follow Rule 13.\n"
+            "   Labels to look for: 'Other expense/(income)', 'Other (income)/expense', 'Other income/expenses',\n"
+            "   'Other income, net', 'Non-operating expense'. Also check EBITDA adjustment tables.\n"
+            "   Do NOT extract if label includes 'interest'. Sign: expense=positive, income=negative.\n"
+            "   Output null if not explicitly labeled in a financial table.\n\n"
             "Output all numeric values in $000s (thousands). "
             "If currency is CAD, output as-is without USD conversion. "
             "If a metric does not exist in the document, use null."
