@@ -128,6 +128,26 @@ class CIMParser:
                 "inventory", "inventories", "inventory, net", "stock",
                 "raw materials", "finished goods", "work in progress", "work-in-progress",
                 "total inventory",
+                # Business overview keywords (for Company_Summary extraction)
+                "business overview", "company overview", "executive summary",
+                "company description", "business description", "business profile",
+                "company profile", "about the company", "about the business",
+                "products and services", "product and service", "business model",
+                "company history", "key customers", "end markets", "end-markets",
+                "investment highlights", "investment overview", "transaction overview",
+                "overview", "introduction",
+                # Market intelligence keywords (for Market_Intelligence extraction)
+                "competitive landscape", "competition", "competitors", "competitive position",
+                "competitive overview", "competitive dynamics", "key competitors",
+                "market overview", "industry overview", "market size", "market opportunity",
+                "total addressable market", "addressable market", "tam", "sam", "som",
+                "market growth", "market growth rate", "industry growth", "cagr",
+                "market share", "market position", "key players", "major players",
+                "industry players", "industry participants", "industry dynamics",
+                "market trends", "industry trends", "competitive advantages",
+                "barriers to entry", "market leadership", "fragmented market",
+                "industry revenue", "industry sales", "total industry", "dealer industry",
+                "industry outlook", "industry shipments", "unit shipments",
             ]
             
         logging.info(f"Filtering content over {len(self.extracted_text)} text pages and {len(self.extracted_tables)} tables...")
@@ -268,6 +288,27 @@ class LLMExtractor:
             excel_mapped[field] = mapped
 
         return excel_mapped
+
+    @staticmethod
+    def _normalize_nulls(result: Dict) -> Dict:
+        """
+        Convert year-keyed objects where ALL year values are null into scalar null.
+        e.g. {"2023_A": null, "2024_A": null} → null
+        Leaves Market_Intelligence, Investment_Recommendation, Company_Summary untouched.
+        """
+        SKIP_KEYS = {"Market_Intelligence", "Investment_Recommendation", "Company_Summary"}
+        year_pat = re.compile(r'^\d{4}_(A|E)$|^TTM_\d{4}$|^TTM$')
+        normalized = {}
+        for key, value in result.items():
+            if key in SKIP_KEYS or not isinstance(value, dict):
+                normalized[key] = value
+            else:
+                year_vals = {k: v for k, v in value.items() if year_pat.match(k)}
+                if year_vals and all(v is None for v in year_vals.values()):
+                    normalized[key] = None
+                else:
+                    normalized[key] = value
+        return normalized
 
     def extract_fields(self, relevant_content: List[Dict[str, Any]], client_requirements: str) -> Optional[Dict]:
         """
@@ -565,9 +606,15 @@ class LLMExtractor:
             "         a) 'Accounts Receivable' or 'Account Receivable'\n"
             "         b) 'Accounts Receivable, net' or 'Trade Receivables'\n"
             "         c) 'Receivables, net' or 'Net Receivables' or 'AR'\n"
-            "     STEP 2 — Identify the MOST RECENT actual period in the table:\n"
-            "         Priority order: TTM_YYYY > highest YYYY_A > YYYY_B (budget as proxy) > YYYY_E (last resort)\n"
-            "         Use the value from that single period only.\n"
+            "     STEP 2 — Identify the MOST RECENT ACTUAL period in the table:\n"
+            "         'Actual' means a year column whose label ends in 'A' or 'a' (e.g. 2024A, FY24A, Sep-24A).\n"
+            "         Priority order: TTM_YYYY > highest YYYY_A > YYYY_B (budget, last resort) > YYYY_E (last resort)\n"
+            "         *** CRITICAL WARNING: CIM tables often extend 5-8 years of projections beyond the actuals.\n"
+            "             The LAST column in the table is almost always a PROJECTED year (E/B/F suffix).\n"
+            "             NEVER use it as 'most recent'. Scan left from the right until you find the last 'A' column.\n"
+            "             EXAMPLE: columns = 2023A, 2024A, 2025B, 2026E, 2027E, 2028E, 2029E, 2030E\n"
+            "                      → most recent actual = 2024A (second column), NOT 2030E (last column). ***\n"
+            "         Use the value from that single actual period only.\n"
             "   HARD RULES:\n"
             "     - Output ONE single number — not a dict of years. Format: \"AR\": 6147\n"
             "     - ALWAYS use net value (after allowance for doubtful accounts) if available.\n"
@@ -592,9 +639,15 @@ class LLMExtractor:
             "         c) 'Total Inventory' (if broken into components)\n"
             "         d) 'Raw Materials', 'Work in Progress', 'Finished Goods' — BUT only if a\n"
             "            'Total Inventory' subtotal row also exists; use the subtotal, never sum manually.\n"
-            "     STEP 2 — Identify the MOST RECENT actual period in the table:\n"
-            "         Priority order: TTM_YYYY > highest YYYY_A > YYYY_B (budget) > YYYY_E (last resort)\n"
-            "         Use the value from that single period only.\n"
+            "     STEP 2 — Identify the MOST RECENT ACTUAL period in the table:\n"
+            "         'Actual' means a year column whose label ends in 'A' or 'a' (e.g. 2024A, FY24A).\n"
+            "         Priority order: TTM_YYYY > highest YYYY_A > YYYY_B (budget, last resort) > YYYY_E (last resort)\n"
+            "         *** CRITICAL WARNING: CIM tables often extend 5-8 projected years beyond the actuals.\n"
+            "             The LAST column in the table is almost always a PROJECTED year (E/B/F suffix).\n"
+            "             NEVER use it as 'most recent'. Scan left from the right until you find the last 'A' column.\n"
+            "             EXAMPLE: columns = 2023A, 2024A, 2025B, 2026E, ..., 2030E\n"
+            "                      → most recent actual = 2024A (second column), NOT 2030E (last column). ***\n"
+            "         Use the value from that single actual period only.\n"
             "   HARD RULES:\n"
             "     - Output ONE single number — not a dict of years. Format: \"Inventory\": 13512\n"
             "     - Zero (0) is a valid value — service businesses with no physical goods output 0, not null.\n"
@@ -609,7 +662,82 @@ class LLMExtractor:
             "     - If multiple balance sheet snapshots exist, always pick the most recent period.\n"
             "     - If only a single snapshot is shown (e.g. 'As of Sep-25'), use that value.\n"
             "     - Normalise to $000s. If CAD, output as-is without USD conversion.\n"
-            "     - If Inventory is not found in any balance sheet or NWC table → output null."
+            "     - If Inventory is not found in any balance sheet or NWC table → output null.\n"
+            "20. MARKET INTELLIGENCE EXTRACTION LOGIC:\n"
+            "   Extract competitive landscape and market sizing data from the CIM.\n"
+            "   OUTPUT: a structured object with three sub-fields (each can independently be null):\n"
+            "     { \"competitors\": [...] or null, \"market_size\": string or null, \"market_growth_rate\": string or null }\n\n"
+            "   SUB-FIELD RULES:\n\n"
+            "   A) competitors — array of competitor company names:\n"
+            "     SOURCE: competitive landscape, competition, market overview sections (narrative text OR comparison tables).\n"
+            "     Extract only company/brand names explicitly named as competitors in the document.\n"
+            "     EDGE CASES:\n"
+            "       - Document names 3–10 competitors → list all named companies as strings.\n"
+            "       - Document says 'fragmented market with no dominant competitor' → output null (no names given).\n"
+            "       - Document lists competitors only in a comparison table → still extract the names.\n"
+            "       - Company itself appears in a competitor table → exclude it from the list.\n"
+            "       - Document mentions competitors only in passing ('competes with large public companies') → null.\n"
+            "       - Competitor described by category only ('large distributors') with no name → skip it.\n"
+            "       - No competitive section present at all → null.\n"
+            "     MAX 12 competitors. Output as array of strings, e.g. [\"Company A\", \"Company B\"].\n"
+            "     If no named competitors found → output null (not an empty array).\n\n"
+            "   B) market_size — descriptive string for the overall industry/market size:\n"
+            "     SOURCE: market overview, industry overview, investment highlights, competitive landscape sections.\n"
+            "     Accept ANY of these labels as a market size indicator (case-insensitive):\n"
+            "       - 'Total Addressable Market', 'TAM', 'Addressable Market', 'Market Size'\n"
+            "       - 'Industry Revenue', 'Industry Sales', 'Total Industry Revenue', 'Total Industry Sales'\n"
+            "       - '[Industry Name] Market', e.g. 'RV Market', 'U.S. Motorhome Market', 'North American Market'\n"
+            "       - '[Industry Name] Dealer Industry Revenue' or '[Industry Name] Industry Revenue Outlook'\n"
+            "       - 'Total Market', 'Overall Market', 'Global Market', 'North American Market'\n"
+            "       - Any figure describing the size of the industry the company operates in\n"
+            "     Extract the figure with units and year if stated (e.g. '$48.9 billion USD (2024)').\n"
+            "     EDGE CASES:\n"
+            "       - Given as a range ('$3–5 billion') → preserve as-is: '$3–5 billion'.\n"
+            "       - Given for multiple segments → extract total/combined figure if stated; if not, describe\n"
+            "         the segments (e.g. 'Segment A: $1.2B; Segment B: $0.8B').\n"
+            "       - Market size in CAD or another currency → preserve with currency symbol.\n"
+            "       - Figure cited from a third-party source ('per XYZ Research, $6B market') → extract\n"
+            "         the figure only, omit the source name.\n"
+            "       - Industry revenue given for current year AND projected years → use most recent actual/stated year.\n"
+            "       - Market size stated only as 'large' or 'growing' with no numeric figure → null.\n"
+            "       - No industry/market size figure anywhere in the document → null.\n"
+            "     Do NOT convert or reformat the number — preserve units exactly as in the document.\n\n"
+            "   C) market_growth_rate — descriptive string for market growth:\n"
+            "     SOURCE: same market/industry overview sections.\n"
+            "     Extract the stated CAGR or growth rate with time horizon if given (e.g. '~8% CAGR (2024–2028)').\n"
+            "     EDGE CASES:\n"
+            "       - Given as a range ('6–9% CAGR') → preserve as-is.\n"
+            "       - Stated as historical only ('grew 7% in 2023') → extract with year.\n"
+            "       - Only qualitative ('fast-growing', 'double-digit growth') with no number → null.\n"
+            "       - Multiple growth rates for different segments → take the overall market rate if stated;\n"
+            "         if only segment rates given, use largest or most relevant segment, note it.\n"
+            "       - No growth figure anywhere → null.\n\n"
+            "   GLOBAL HARD RULES for Market_Intelligence:\n"
+            "     - NEVER hallucinate or infer competitors, market sizes, or growth rates not in the document.\n"
+            "     - NEVER extract from financial tables (P&L, balance sheet) — narrative and overview sections only.\n"
+            "     - NEVER include financial metrics (revenue, EBITDA, margins) inside Market_Intelligence.\n"
+            "     - If the CIM has no market/competitive overview section at all → output null for the entire field.\n"
+            "     - Output the full structured object even if only one sub-field has data; set others to null.\n"
+            "21. COMPANY SUMMARY EXTRACTION LOGIC:\n"
+            "   A concise plain-English description of what the company does.\n"
+            "   OUTPUT: a single string. Target length: 200–250 words. Must be in English.\n\n"
+            "   EXTRACTION RULES:\n"
+            "     STEP 1 — Read the business overview, executive summary, company profile, or\n"
+            "       investment highlights section (typically the first 5–15 pages of the CIM).\n"
+            "     STEP 2 — Write a factual, neutral summary covering:\n"
+            "       a) What the company does — its core business and products/services\n"
+            "       b) Key end markets or customer segments it serves\n"
+            "       c) Business model (how it makes money — e.g. recurring contracts, direct sales, etc.)\n"
+            "       d) Geographic presence if mentioned\n"
+            "       e) Any standout competitive advantages or brief company history if stated\n"
+            "   HARD RULES:\n"
+            "     - Write as a neutral third-party analyst — no promotional language, no exclamation marks.\n"
+            "     - Do NOT quote raw CIM text verbatim — paraphrase into clean analytical prose.\n"
+            "     - Do NOT include any financial figures (revenue, EBITDA, margins, etc.) in this summary.\n"
+            "     - Do NOT reference the CIM document itself ('this document states...', 'per the CIM...').\n"
+            "     - Keep it strictly 200–250 words — do not go below 180 or above 270.\n"
+            "     - If no business overview or company description section is present → output null.\n"
+            "     - Output format: plain string, no bullet points, no markdown headers."
         )
 
         user_prompt = (
@@ -644,13 +772,28 @@ class LLMExtractor:
             "  Derivation sign: WC_Change = NWC(N) - NWC(N-1), then REVERSE sign for cash flow convention.\n"
             "  Both historical and projected years. If only 1 NWC balance year exists → null.\n"
             "  \"AR\": single_number_or_null,\n"
-            "  NOTE for AR: ONE single value only — the most recent actual AR balance from balance sheet or NWC table.\n"
-            "  Priority: TTM > latest YYYY_A > YYYY_B > YYYY_E. Normalised to $000s. NOT a time series.\n"
-            "  \"Inventory\": single_number_or_null\n"
-            "  NOTE for Inventory: ONE single value only — most recent actual Inventory balance from balance sheet or NWC table.\n"
-            "  Priority: TTM > latest YYYY_A > YYYY_B > YYYY_E. Normalised to $000s. NOT a time series.\n"
+            "  NOTE for AR: ONE single value — last 'A'-suffixed actual year only (e.g. 2024A not 2030E). NOT a time series.\n"
+            "  NEVER use projected (E/B/F) columns. Table may extend to 2030E — use only the last actual column.\n"
+            "  \"Inventory\": single_number_or_null,\n"
+            "  NOTE for Inventory: ONE single value — last 'A'-suffixed actual year only (e.g. 2024A not 2030E). NOT a time series.\n"
+            "  NEVER use projected (E/B/F) columns. Table may extend to 2030E — use only the last actual column.\n"
             "  Zero (0) is valid for service businesses. Use Total Inventory subtotal if broken into components.\n"
             "  NEVER extract from narrative text or cash flow movements — balance sheet/NWC table only.\n"
+            "  \"Market_Intelligence\": {\n"
+            "    \"competitors\": [\"Name A\", \"Name B\", ...] or null,\n"
+            "    \"market_size\": \"descriptive string with units and year\" or null,\n"
+            "    \"market_growth_rate\": \"descriptive string with CAGR and horizon\" or null\n"
+            "  },\n"
+            "  NOTE for Market_Intelligence: extract from competitive landscape / market overview narrative sections.\n"
+            "  competitors = named company strings only (max 12) — null if no names given or section absent.\n"
+            "  market_size = preserve original figure + units + year (e.g. '$4.2 billion (2024)') — null if not stated.\n"
+            "  market_growth_rate = preserve CAGR/rate + horizon (e.g. '~8% CAGR 2024-2028') — null if qualitative only.\n"
+            "  If entire market/competitive section absent → set the full field to null (not an object).\n"
+            "  \"Company_Summary\": \"string of 200-250 words or null\"\n"
+            "  NOTE for Company_Summary: plain English prose, 200-250 words, no financial figures, no bullet points.\n"
+            "  Describe: what the company does, end markets, business model, geography, competitive position.\n"
+            "  Source: business overview / executive summary / company profile section of the CIM (NOT financial tables).\n"
+            "  Output null if no overview section is present.\n"
             "}\n"
             "Include every period found in the document. Use null for any metric not found."
         )
@@ -678,14 +821,14 @@ class LLMExtractor:
                     
                 response = self.client.chat.completions.create(**kwargs)
                 output = response.choices[0].message.content
-                
+
                 # Cleanup potential wrapper blocks if model wasn't strictly forced into json format
                 if "```json" in output:
                     output = output.split("```json")[1].split("```")[0]
                 elif "```" in output:
                     output = output.split("```")[1].split("```")[0]
-                    
-                return json.loads(output.strip())
+
+                return self._normalize_nulls(json.loads(output.strip()))
                 
             elif self.provider == "anthropic":
                 # Anthropic implementation
@@ -705,20 +848,120 @@ class LLMExtractor:
                     output_text = output_text.split("```json")[1].split("```")[0]
                 elif "```" in output_text:
                     output_text = output_text.split("```")[1].split("```")[0]
-                    
-                return json.loads(output_text.strip())
+
+                return self._normalize_nulls(json.loads(output_text.strip()))
 
         except Exception as e:
             logging.error(f"Error during LLM extraction: {e}")
             return None
 
-def main():
-    parser = argparse.ArgumentParser(description="Parse CIM PDF and extract specific financial fields via LLM.")
-    parser.add_argument("--pdf", type=str, required=True, help="Path to the CIM PDF file (e.g., sample_cim.pdf).")
-    parser.add_argument(
-        "--req", 
-        type=str, 
-        default=(
+    def generate_investment_recommendation(self, extracted_data: Dict, deal_value: float) -> Optional[Dict]:
+        """
+        Makes a second LLM call using the already-extracted data + deal value
+        to produce a structured M&A investment recommendation.
+        """
+        system_prompt = (
+            "You are a senior M&A analyst at a private equity firm. "
+            "You have been given extracted financial and market data from a CIM (Confidential Information Memorandum) "
+            "and an enterprise value (deal price) the client is considering paying. "
+            "Your job is to give a clear, honest investment recommendation.\n\n"
+            "CRITICAL RULES:\n"
+            "1. Base your recommendation on the data provided — do NOT assume or invent figures not given.\n"
+            "2. If a key metric is null/missing, reason from what IS available and explicitly flag the gap.\n"
+            "3. Never give a false sense of certainty — if data is sparse, say so and reduce confidence.\n"
+            "4. Be direct and concise — this is for a sophisticated PE client, not a retail investor.\n"
+            "5. Output ONE valid JSON object and nothing else.\n\n"
+            "VERDICT OPTIONS: 'Strong Buy', 'Buy', 'Caution', 'Pass', 'Insufficient Data'\n"
+            "CONFIDENCE OPTIONS: 'High', 'Medium', 'Low'\n\n"
+            "VERDICT GUIDANCE (EV/EBITDA based — adjust up/down for data quality and trends):\n"
+            "  < 6x  → lean Strong Buy (if revenue growing and margins healthy)\n"
+            "  6–9x  → Buy\n"
+            "  9–12x → Caution\n"
+            "  > 12x → Pass (unless exceptional growth justifies premium)\n"
+            "  EBITDA null AND Revenue null → Insufficient Data\n\n"
+            "CONFIDENCE GUIDANCE:\n"
+            "  High   — EBITDA + Revenue + 3 or more supporting fields present\n"
+            "  Medium — EBITDA or Revenue present + at least 1 supporting field\n"
+            "  Low    — Only 1 key metric present, rest null\n\n"
+            "FREE CASH FLOW NOTE: If CAPEX is available, estimate FCF = EBITDA + CAPEX (CAPEX is negative). "
+            "High capex drain (|CAPEX| > 50% of EBITDA) is a risk factor. "
+            "Persistent negative WC_Change (growing NWC) also reduces real free cash flow.\n\n"
+            "MARKET CONTEXT: Use Market_Intelligence if present to assess tailwinds/headwinds. "
+            "Growing market (positive CAGR) = positive signal. Fragmented competitive market = pricing risk.\n\n"
+            "OUTPUT FORMAT — return exactly this JSON structure:\n"
+            "{\n"
+            "  \"verdict\": \"Strong Buy|Buy|Caution|Pass|Insufficient Data\",\n"
+            "  \"confidence\": \"High|Medium|Low\",\n"
+            "  \"ev_ebitda_multiple\": number_or_null,\n"
+            "  \"ev_revenue_multiple\": number_or_null,\n"
+            "  \"key_positives\": [\"concise point\", \"concise point\", ...],\n"
+            "  \"key_risks\": [\"concise point\", \"concise point\", ...],\n"
+            "  \"data_gaps\": [\"field name\", ...],\n"
+            "  \"rationale\": \"2-3 sentence plain-English summary of the recommendation\"\n"
+            "}\n"
+            "key_positives and key_risks: 2-4 points each, short and specific.\n"
+            "data_gaps: list only fields that were null/missing AND were relevant to the analysis.\n"
+            "ev_ebitda_multiple: round to 1 decimal. Use most recent actual EBITDA; if null use first projected.\n"
+            "ev_revenue_multiple: round to 2 decimals. Same priority.\n"
+            "If both EBITDA and Revenue are null → verdict must be 'Insufficient Data'."
+        )
+
+        user_prompt = (
+            f"DEAL VALUE (Enterprise Value being considered): ${deal_value:,.0f} (in USD, as entered by client)\n"
+            f"NOTE: All financial values below are in $000s (thousands).\n\n"
+            f"EXTRACTED FINANCIAL DATA:\n{json.dumps(extracted_data, indent=2)}\n\n"
+            "Using the data above and the deal value provided, generate the investment recommendation JSON."
+        )
+
+        logging.info(f"Generating investment recommendation (deal value: ${deal_value:,.0f})...")
+        try:
+            if self.provider in ["openai", "nvidia", "ollama"]:
+                kwargs = {
+                    "model": self.model_name,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    "temperature": 0.1,
+                }
+                if self.provider == "openai":
+                    kwargs["response_format"] = {"type": "json_object"}
+                elif self.provider == "nvidia":
+                    kwargs["top_p"] = 0.7
+                    kwargs["max_tokens"] = 2048
+                elif self.provider == "ollama":
+                    kwargs["max_tokens"] = 2048
+
+                response = self.client.chat.completions.create(**kwargs)
+                output = response.choices[0].message.content
+                if "```json" in output:
+                    output = output.split("```json")[1].split("```")[0]
+                elif "```" in output:
+                    output = output.split("```")[1].split("```")[0]
+                return json.loads(output.strip())
+
+            elif self.provider == "anthropic":
+                response = self.client.messages.create(
+                    model=self.model_name,
+                    max_tokens=2048,
+                    temperature=0.1,
+                    system=system_prompt,
+                    messages=[
+                        {"role": "user", "content": f"{user_prompt}\n\nOutput only JSON wrapped in ```json ... ``` blocks."}
+                    ]
+                )
+                output_text = response.content[0].text
+                if "```json" in output_text:
+                    output_text = output_text.split("```json")[1].split("```")[0]
+                elif "```" in output_text:
+                    output_text = output_text.split("```")[1].split("```")[0]
+                return json.loads(output_text.strip())
+
+        except Exception as e:
+            logging.error(f"Error generating investment recommendation: {e}")
+            return None
+
+DEFAULT_CLIENT_REQ = (
             "Extract these financial metrics for ALL available periods found in the document:\n"
             "1) Total_Revenue (also labeled as: net revenue, total net revenue)\n"
             "2) Gross_Margin (also labeled as: contribution margin, gross profit, CM — "
@@ -783,30 +1026,66 @@ def main():
             "   Output null if both steps fail (no change row and fewer than 2 NWC balance years).\n"
             "12) AR — Accounts Receivable balance for ABL collateral (Sources section C7). Follow Rule 18.\n"
             "   Labels: 'Accounts Receivable', 'Account Receivable, net', 'Trade Receivables', 'Receivables, net'.\n"
-            "   OUTPUT: ONE single number (not a time series) — the most recent actual balance only.\n"
-            "   Period priority: TTM > latest YYYY_A > YYYY_B > YYYY_E.\n"
+            "   OUTPUT: ONE single number (not a time series) — the most recent ACTUAL balance only.\n"
+            "   'Actual' = last year column ending in 'A' or 'a' (e.g. 2024A). NEVER use E/B/F projected columns.\n"
+            "   WARNING: If table spans e.g. 2023A–2030E, the most recent actual is 2024A, NOT the last column.\n"
+            "   Period priority: TTM > latest YYYY_A > YYYY_B > YYYY_E (only if no actual exists).\n"
             "   Source: balance sheet or NWC schedule table ONLY — never from P&L or cash flow table.\n"
             "   Use net value (after allowance) if available. Normalise to $000s.\n"
             "   Output null if AR not found in any balance sheet or NWC table.\n"
             "13) Inventory — Inventory balance for ABL collateral (Sources section C8). Follow Rule 19.\n"
             "   Labels: 'Inventory', 'Inventories', 'Inventory, net', 'Stock', 'Total Inventory'.\n"
-            "   OUTPUT: ONE single number — the most recent actual balance only (not a time series).\n"
-            "   Period priority: TTM > latest YYYY_A > YYYY_B > YYYY_E.\n"
+            "   OUTPUT: ONE single number — the most recent ACTUAL balance only (not a time series).\n"
+            "   'Actual' = last year column ending in 'A' or 'a'. NEVER use E/B/F projected columns.\n"
+            "   WARNING: If table spans e.g. 2023A–2030E, the most recent actual is 2024A, NOT the last column.\n"
+            "   Period priority: TTM > latest YYYY_A > YYYY_B > YYYY_E (only if no actual exists).\n"
             "   Source: balance sheet or NWC schedule table ONLY — never from P&L or cash flow table.\n"
             "   Zero (0) is valid — service businesses with no physical goods output 0, not null.\n"
             "   If broken into components (Raw Materials/WIP/Finished Goods), use 'Total Inventory' subtotal only.\n"
             "   Use net value (after obsolescence reserve) if shown. Normalise to $000s.\n"
             "   NEVER extract from narrative text (e.g. 'inventory reduced from $34M') — table values only.\n"
-            "   Output null if Inventory not found in any balance sheet or NWC table.\n\n"
+            "   Output null if Inventory not found in any balance sheet or NWC table.\n"
+            "14) Market_Intelligence — Competitive landscape and market sizing. Follow Rule 20.\n"
+            "   OUTPUT: structured object with exactly these three sub-fields:\n"
+            "     competitors: array of named competitor company strings, or null if none explicitly named.\n"
+            "     market_size: string with figure + units + year if stated (e.g. '$48.9 billion USD (2024)'), or null.\n"
+            "       Accept any label: TAM, Addressable Market, Industry Revenue, Total Industry Sales,\n"
+            "       '[Industry] Market', '[Industry] Dealer Industry Revenue', Total Market, etc.\n"
+            "     market_growth_rate: string with CAGR/growth rate + time horizon if stated, or null.\n"
+            "   SOURCE: competitive landscape, market overview, industry overview, investment highlights\n"
+            "   sections — narrative text AND comparison tables. NOT financial P&L/balance sheet tables.\n"
+            "   CRITICAL EDGE CASES:\n"
+            "     - Only extract named competitors — 'large players' with no name → skip.\n"
+            "     - Fragmented market with no named players → competitors: null.\n"
+            "     - Market size as range → preserve as string. Multi-segment → total if stated.\n"
+            "     - Qualitative growth only ('fast-growing') → market_growth_rate: null.\n"
+            "     - If entire market/competitive section is absent → output null for the whole field.\n"
+            "     - NEVER invent data not in the document.\n"
+            "15) Company_Summary — A concise analyst-written description of the company. Follow Rule 21.\n"
+            "   Source: executive summary, business overview, company profile, or investment highlights\n"
+            "   sections (typically the first 5–15 pages of the CIM).\n"
+            "   Length: 200–250 words. Plain English prose — no bullet points, no financial figures.\n"
+            "   Neutral tone: describe what the company does, its end markets, business model,\n"
+            "   geographic presence, and competitive position.\n"
+            "   Output null if no business overview section is present in the document.\n\n"
             "Output all numeric values in $000s (thousands). "
             "If currency is CAD, output as-is without USD conversion. "
             "If a metric does not exist in the document, use null."
-        ),
+)
+
+def main():
+    parser = argparse.ArgumentParser(description="Parse CIM PDF and extract specific financial fields via LLM.")
+    parser.add_argument("--pdf", type=str, required=True, help="Path to the CIM PDF file (e.g., sample_cim.pdf).")
+    parser.add_argument(
+        "--req",
+        type=str,
+        default=DEFAULT_CLIENT_REQ,
         help="Description of exactly what you want extracted from the financials."
     )
     parser.add_argument("--provider", type=str, default="openai", choices=["openai", "anthropic", "nvidia", "ollama"], help="LLM Provider to use (openai, anthropic, nvidia, or ollama).")
     parser.add_argument("--model", type=str, default="gpt-4o", help="Model name (e.g., gpt-4o, claude-3-5-sonnet-20240620, meta/llama-3.3-70b-instruct)")
     parser.add_argument("--api-key", type=str, default=None, help="API key (overrides environment variable).")
+    parser.add_argument("--deal-value", type=float, default=None, help="Enterprise value / deal price being considered (in USD). If provided, generates an investment recommendation.")
     args = parser.parse_args()
 
     # Authentication — --api-key flag takes priority, then environment variable
@@ -836,6 +1115,21 @@ def main():
 
         extractor = LLMExtractor(api_key=api_key, provider=args.provider, model_name=args.model)
         result = extractor.extract_fields(relevant_sections, client_requirements=args.req)
+
+        # Generate investment recommendation if deal value provided
+        if result and args.deal_value is not None:
+            recommendation = extractor.generate_investment_recommendation(result, args.deal_value)
+            if recommendation:
+                # Insert recommendation between Market_Intelligence and Company_Summary
+                ordered = {}
+                for key in result:
+                    if key == "Company_Summary":
+                        ordered["Investment_Recommendation"] = recommendation
+                    ordered[key] = result[key]
+                # If Company_Summary was not present, append at end before it
+                if "Investment_Recommendation" not in ordered:
+                    ordered["Investment_Recommendation"] = recommendation
+                result = ordered
 
         # Output the result
         if result:

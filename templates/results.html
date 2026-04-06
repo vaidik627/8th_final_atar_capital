@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>Extraction Results · CIM Intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --ink:         #0A0D14;
+      --ink-soft:    #141820;
+      --ink-mid:     #1C2230;
+      --rule:        #232C3D;
+      --rule-light:  #2E3A50;
+      --silver:      #D4DCE8;
+      --silver-dim:  #9BAFC4;
+      --silver-faint:#607080;
+      --gold:        #C9A84C;
+      --gold-dim:    #7A6130;
+      --gold-glow:   rgba(201,168,76,0.12);
+      --gold-glow2:  rgba(201,168,76,0.06);
+      --white:       #F2F6FC;
+      --danger:      #E05A5A;
+      --danger-soft: rgba(224,90,90,0.12);
+      --success:     #3DB87A;
+      --success-soft:rgba(61,184,122,0.1);
+      --projected:   rgba(99,130,201,0.08);
+      --mono:        'DM Mono', monospace;
+      --sans:        'DM Sans', sans-serif;
+      --serif:       'DM Serif Display', serif;
+    }
+
+    html { font-size: 16px; }
+    body {
+      background: var(--ink);
+      color: var(--silver);
+      font-family: var(--sans);
+      font-weight: 400;
+      line-height: 1.6;
+      min-height: 100vh;
+      overflow-x: auto;
+    }
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0;
+      background:
+        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(201,168,76,0.06) 0%, transparent 65%),
+        radial-gradient(ellipse 40% 30% at 90% 80%, rgba(59,130,246,0.03) 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    .shell { position: relative; z-index: 1; display: flex; flex-direction: column; min-height: 100vh; }
+
+    /* ── Header ── */
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 3rem; height: 64px;
+      border-bottom: 1px solid var(--rule);
+      background: rgba(10,13,20,0.9);
+      backdrop-filter: blur(12px);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .header-brand { display: flex; align-items: center; gap: 16px; }
+    .header-logo {
+      width: 32px; height: 32px;
+      border: 1.5px solid var(--gold); border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      text-decoration: none;
+    }
+    .header-logo svg { width: 16px; height: 16px; stroke: var(--gold); fill: none; stroke-width: 2; }
+    .header-wordmark { display: flex; flex-direction: column; line-height: 1.15; }
+    .header-title { font-family: var(--serif); font-size: 1rem; color: var(--white); letter-spacing: 0.01em; }
+    .header-sub { font-size: 0.72rem; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--silver-dim); }
+    .header-rule { width: 1px; height: 24px; background: var(--rule-light); }
+    .header-badge {
+      font-size: 0.72rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--gold); background: var(--gold-glow2);
+      border: 1px solid rgba(201,168,76,0.25);
+      padding: 4px 12px; border-radius: 2px;
+    }
+    .header-right { display: flex; align-items: center; gap: 0.75rem; }
+
+    /* ── Action buttons ── */
+    .btn-ghost {
+      display: flex; align-items: center; gap: 7px;
+      background: none; border: 1px solid var(--rule-light);
+      color: var(--silver-dim); border-radius: 3px;
+      font-family: var(--sans); font-size: 0.875rem; font-weight: 500;
+      padding: 7px 16px; cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+      text-decoration: none;
+    }
+    .btn-ghost:hover { border-color: var(--silver-faint); color: var(--silver); }
+    .btn-ghost svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; flex-shrink: 0; }
+    .btn-primary {
+      display: flex; align-items: center; gap: 7px;
+      background: var(--gold); border: none; border-radius: 3px;
+      color: var(--ink); font-family: var(--sans);
+      font-size: 0.875rem; font-weight: 700;
+      padding: 7px 18px; cursor: pointer;
+      transition: opacity 0.15s;
+      text-decoration: none;
+    }
+    .btn-primary:hover { opacity: 0.85; }
+    .btn-primary svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2.5; flex-shrink: 0; }
+
+    /* ── Main ── */
+    .main { flex: 1; padding: 2.5rem 3rem 4rem; max-width: 1600px; margin: 0 auto; width: 100%; }
+
+    /* ── Deal header ── */
+    .deal-header {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      margin-bottom: 2.5rem;
+      padding-bottom: 2rem;
+      border-bottom: 1px solid var(--rule);
+      animation: fadeUp 0.4s ease both;
+    }
+    .deal-meta { display: flex; flex-direction: column; gap: 4px; }
+    .deal-eyebrow {
+      font-size: 0.75rem; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--silver-faint); margin-bottom: 6px;
+    }
+    .deal-name {
+      font-family: var(--serif); font-size: clamp(1.5rem, 2.5vw, 2.25rem);
+      color: var(--white); line-height: 1.1; letter-spacing: -0.015em;
+    }
+    .deal-name em { font-style: italic; color: var(--gold); }
+    .deal-pills { display: flex; align-items: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+    .pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 0.8rem; font-weight: 500;
+      border-radius: 2px; padding: 4px 12px;
+    }
+    .pill-file { background: var(--ink-mid); border: 1px solid var(--rule-light); color: var(--silver-dim); font-family: var(--mono); }
+    .pill-value { background: var(--gold-glow); border: 1px solid rgba(201,168,76,0.2); color: var(--gold); }
+    .pill-fields { background: var(--success-soft); border: 1px solid rgba(61,184,122,0.2); color: var(--success); }
+    .pill svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+    .deal-actions { display: flex; align-items: center; gap: 0.75rem; }
+
+    /* ── Loading / error states ── */
+    .state-panel {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      min-height: 60vh; gap: 16px; text-align: center;
+    }
+    .state-icon { width: 48px; height: 48px; stroke: var(--silver-faint); fill: none; stroke-width: 1.5; }
+    .state-title { font-family: var(--serif); font-size: 1.4rem; color: var(--white); }
+    .state-sub { font-size: 0.85rem; color: var(--silver-dim); max-width: 360px; }
+    .spinner-ring {
+      width: 40px; height: 40px;
+      border: 2px solid var(--rule-light);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+
+    /* ── Section groups ── */
+    .sections { display: flex; flex-direction: column; gap: 2rem; animation: fadeUp 0.45s 0.05s ease both; }
+
+    .section-wrap {}
+    .section-label {
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--silver-dim); margin-bottom: 0.75rem;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .section-label::after { content: ''; flex: 1; height: 1px; background: var(--rule); }
+
+    /* ── Table ── */
+    .table-scroll { overflow-x: auto; }
+    .fin-table {
+      width: 100%; border-collapse: collapse;
+      font-size: 0.9rem;
+      border: 1px solid var(--rule);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    /* Column widths */
+    .fin-table .col-field { min-width: 210px; width: 210px; }
+    .fin-table .col-year  { min-width: 110px; width: 110px; }
+
+    /* Header row */
+    .fin-table thead tr {
+      background: var(--ink-mid);
+      border-bottom: 1px solid var(--rule-light);
+    }
+    .fin-table th {
+      padding: 11px 16px;
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--silver-dim);
+      text-align: right;
+      white-space: nowrap;
+      border-right: 1px solid var(--rule);
+    }
+    .fin-table th:first-child { text-align: left; color: var(--silver-faint); }
+    .fin-table th:last-child { border-right: none; }
+    .fin-table th.actual-col { color: var(--silver-dim); }
+    .fin-table th.projected-col { color: #6382C9; }
+    .fin-table th.ttm-col { color: var(--gold); }
+
+    /* Year badge in header */
+    .year-label { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+    .year-year { font-size: 0.85rem; font-weight: 700; letter-spacing: 0.02em; }
+    .year-badge {
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em;
+      padding: 2px 6px; border-radius: 2px;
+    }
+    .badge-a { background: rgba(200,208,220,0.1); color: var(--silver-dim); }
+    .badge-e { background: rgba(99,130,201,0.15); color: #6382C9; }
+    .badge-ttm { background: rgba(201,168,76,0.15); color: var(--gold); }
+
+    /* Data rows */
+    .fin-table tbody tr {
+      border-bottom: 1px solid var(--rule);
+      transition: background 0.12s;
+    }
+    .fin-table tbody tr:last-child { border-bottom: none; }
+    .fin-table tbody tr:hover { background: rgba(255,255,255,0.02); }
+    .fin-table td {
+      padding: 13px 16px;
+      border-right: 1px solid var(--rule);
+      vertical-align: middle;
+    }
+    .fin-table td:last-child { border-right: none; }
+
+    /* Field name cell */
+    .td-field {
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .td-field-name {
+      font-size: 0.92rem; font-weight: 600; color: var(--white);
+    }
+    .td-field-key {
+      font-family: var(--mono); font-size: 0.72rem; color: var(--silver-faint);
+    }
+    .td-field-rule {
+      font-size: 0.72rem; color: var(--silver-faint);
+    }
+
+    /* Value cell */
+    .td-val {
+      text-align: right; font-family: var(--mono); font-size: 0.9rem;
+      font-weight: 600; color: var(--white);
+      white-space: nowrap;
+    }
+    .td-val.null { color: var(--silver-faint); font-style: italic; font-size: 0.82rem; }
+    .td-val.negative { color: #F08080; }
+    .td-val.projected-col { color: #8BA4D8; }
+    .td-val.ttm-col { color: var(--gold); }
+
+    /* Operating income has sub-info */
+    .val-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+    .val-main { font-family: var(--mono); font-size: 0.9rem; font-weight: 600; color: var(--white); }
+    .val-meta {
+      font-size: 0.7rem; color: var(--silver-faint);
+      display: flex; align-items: center; gap: 4px;
+    }
+    .conf-badge {
+      font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+      padding: 2px 7px; border-radius: 2px;
+    }
+    .conf-high   { background: var(--success-soft); color: var(--success); }
+    .conf-medium { background: rgba(201,168,76,0.12); color: var(--gold); }
+    .conf-low    { background: var(--danger-soft); color: var(--danger); }
+
+    /* Single-value row (AR, Inventory) */
+    .td-single { font-family: var(--mono); font-size: 0.82rem; font-weight: 500; color: var(--gold); }
+    .td-single-empty { font-family: var(--mono); font-size: 0.75rem; color: var(--silver-faint); font-style: italic; }
+
+    /* Sources (2-column) table */
+    .sources-table {
+      width: 100%; border-collapse: collapse;
+      font-size: 0.82rem;
+      border: 1px solid var(--rule);
+      border-radius: 3px; overflow: hidden;
+    }
+    .sources-table thead tr { background: var(--ink-mid); border-bottom: 1px solid var(--rule-light); }
+    .sources-table th {
+      padding: 11px 16px;
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--silver-dim); border-right: 1px solid var(--rule);
+    }
+    .sources-table th:first-child { text-align: left; color: var(--silver-faint); }
+    .sources-table th:last-child { border-right: none; text-align: right; }
+    .sources-table tbody tr { border-bottom: 1px solid var(--rule); transition: background 0.12s; }
+    .sources-table tbody tr:last-child { border-bottom: none; }
+    .sources-table tbody tr:hover { background: rgba(255,255,255,0.02); }
+    .sources-table td { padding: 13px 16px; border-right: 1px solid var(--rule); vertical-align: middle; }
+    .sources-table td:last-child { border-right: none; text-align: right; }
+    .sources-val { font-family: var(--mono); font-size: 0.95rem; font-weight: 700; color: var(--gold); }
+    .sources-val.null { color: var(--silver-faint); font-style: italic; font-weight: 400; font-size: 0.82rem; }
+    .sources-year-tag {
+      display: inline-block; margin-left: 8px;
+      font-size: 0.7rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+      background: rgba(201,168,76,0.12); color: var(--gold-dim);
+      border: 1px solid rgba(201,168,76,0.18); padding: 1px 6px; border-radius: 2px;
+      font-family: var(--mono);
+    }
+
+    /* Projected columns subtle tint */
+    .fin-table td.projected-col,
+    .fin-table th.projected-col {
+      background: rgba(99,130,201,0.03);
+    }
+
+    /* ── Raw JSON toggle ── */
+    .json-section {
+      margin-top: 2rem;
+      border: 1px solid var(--rule);
+      border-radius: 3px;
+      overflow: hidden;
+      animation: fadeUp 0.5s 0.1s ease both;
+    }
+    .json-toggle {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.9rem 1.25rem;
+      background: var(--ink-mid);
+      border: none; width: 100%; cursor: pointer;
+      color: var(--silver-dim);
+      font-family: var(--sans); font-size: 0.82rem; font-weight: 600;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      transition: color 0.15s;
+    }
+    .json-toggle:hover { color: var(--silver); }
+    .json-toggle-icon { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2.5; transition: transform 0.2s; }
+    .json-toggle-icon.open { transform: rotate(180deg); }
+    .json-body { display: none; }
+    .json-body.open { display: block; }
+    .json-pre {
+      margin: 0; padding: 1.25rem;
+      font-family: var(--mono); font-size: 0.82rem;
+      color: var(--silver-dim); line-height: 1.7;
+      background: var(--ink); overflow-x: auto;
+      max-height: 480px; overflow-y: auto;
+    }
+    .json-pre .key    { color: #6382C9; }
+    .json-pre .str    { color: #7EC8A4; }
+    .json-pre .num    { color: var(--gold); }
+    .json-pre .null   { color: var(--silver-faint); }
+    .json-pre .bool   { color: var(--danger); }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--rule-light); border-radius: 2px; }
+
+    /* ── Market Intelligence card ── */
+    .intel-card {
+      background: var(--ink-soft);
+      border: 1px solid var(--rule);
+      border-radius: 3px; overflow: hidden;
+    }
+    .intel-row {
+      display: flex; align-items: flex-start; gap: 24px;
+      padding: 14px 20px; border-bottom: 1px solid var(--rule);
+    }
+    .intel-row:last-child { border-bottom: none; }
+    .intel-label {
+      min-width: 170px; font-size: 0.78rem; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--silver-faint); padding-top: 3px; flex-shrink: 0;
+    }
+    .intel-val { font-size: 0.92rem; color: var(--white); flex: 1; line-height: 1.5; }
+    .intel-val.null { color: var(--silver-faint); font-style: italic; font-size: 0.82rem; }
+    .competitor-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .competitor-chip {
+      font-family: var(--mono); font-size: 0.78rem; font-weight: 500;
+      background: var(--ink-mid); border: 1px solid var(--rule-light);
+      color: var(--silver-dim); border-radius: 2px; padding: 3px 10px;
+    }
+
+    /* ── Investment Recommendation card ── */
+    .rec-card {
+      background: var(--ink-soft);
+      border: 1px solid var(--rule);
+      border-radius: 3px; overflow: hidden;
+    }
+    .rec-header {
+      display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+      padding: 20px 24px; background: var(--ink-mid);
+      border-bottom: 1px solid var(--rule);
+    }
+    .rec-verdict { font-family: var(--serif); font-size: 1.6rem; letter-spacing: -0.01em; }
+    .verdict-strong-buy  { color: #3DB87A; }
+    .verdict-buy         { color: #7EC8A4; }
+    .verdict-caution     { color: var(--gold); }
+    .verdict-pass        { color: var(--danger); }
+    .verdict-insufficient{ color: var(--silver-faint); }
+    .rec-badges { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+    .rec-badge {
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; padding: 4px 12px; border-radius: 2px;
+    }
+    .badge-conf-high   { background: var(--success-soft); color: var(--success); border: 1px solid rgba(61,184,122,0.25); }
+    .badge-conf-medium { background: var(--gold-glow); color: var(--gold); border: 1px solid rgba(201,168,76,0.25); }
+    .badge-conf-low    { background: var(--danger-soft); color: var(--danger); border: 1px solid rgba(224,90,90,0.25); }
+    .rec-multiples {
+      display: flex; gap: 32px; padding: 16px 24px;
+      border-bottom: 1px solid var(--rule); background: var(--ink);
+    }
+    .rec-multiple-item { display: flex; flex-direction: column; gap: 3px; }
+    .rec-multiple-label {
+      font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--silver-faint);
+    }
+    .rec-multiple-val { font-family: var(--mono); font-size: 1.15rem; font-weight: 700; color: var(--white); }
+    .rec-multiple-val.null { color: var(--silver-faint); font-size: 0.85rem; font-weight: 400; font-style: italic; }
+    .rec-body { display: grid; grid-template-columns: 1fr 1fr; }
+    .rec-col { padding: 18px 24px; border-right: 1px solid var(--rule); border-top: 1px solid var(--rule); }
+    .rec-col:last-child { border-right: none; }
+    .rec-col-title {
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; margin-bottom: 10px;
+    }
+    .rec-col-title.positive { color: var(--success); }
+    .rec-col-title.risk     { color: var(--danger); }
+    .rec-list { list-style: none; display: flex; flex-direction: column; gap: 7px; }
+    .rec-list li {
+      font-size: 0.88rem; color: var(--silver);
+      padding-left: 14px; position: relative; line-height: 1.45;
+    }
+    .rec-list li::before { content: '·'; position: absolute; left: 0; font-size: 1.1rem; line-height: 1.3; }
+    .rec-list.positive li::before { color: var(--success); }
+    .rec-list.risk li::before     { color: var(--danger); }
+    .rec-data-gaps {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      padding: 12px 24px; border-top: 1px solid var(--rule);
+    }
+    .rec-data-gaps-label {
+      font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--silver-faint); margin-right: 4px;
+    }
+    .gap-tag {
+      font-family: var(--mono); font-size: 0.72rem; font-weight: 500;
+      background: var(--ink-mid); border: 1px solid var(--rule-light);
+      color: var(--silver-faint); border-radius: 2px; padding: 2px 8px;
+    }
+    .rec-rationale {
+      padding: 16px 24px; border-top: 1px solid var(--rule);
+      font-size: 0.9rem; color: var(--silver-dim); line-height: 1.75; font-style: italic;
+    }
+    .rec-rationale-label {
+      font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--silver-faint); margin-bottom: 6px;
+      font-style: normal;
+    }
+
+    /* ── Company Summary card ── */
+    .summary-card {
+      background: var(--ink-soft);
+      border: 1px solid var(--rule);
+      border-radius: 3px; padding: 24px 28px;
+    }
+    .summary-text {
+      font-size: 0.94rem; line-height: 1.85;
+      color: var(--silver); max-width: 900px;
+    }
+    .summary-text.null { color: var(--silver-faint); font-style: italic; }
+  </style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-brand">
+      <a class="header-logo" href="/">
+        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/>
+          <polyline points="16 7 22 7 22 13"/>
+        </svg>
+      </a>
+      <div class="header-wordmark">
+        <span class="header-title">CIM Intelligence</span>
+        <span class="header-sub">Atar Capital</span>
+      </div>
+      <div class="header-rule" style="width:1px;height:24px;background:var(--rule-light);"></div>
+      <span class="header-badge">Extraction Results</span>
+    </div>
+    <div class="header-right">
+      <button class="btn-ghost" id="btnDownload" onclick="downloadJSON()" style="display:none">
+        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download JSON
+      </button>
+      <a class="btn-primary" href="/">
+        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        New Extraction
+      </a>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main class="main" id="mainContent">
+
+    <!-- Loading state -->
+    <div class="state-panel" id="stateLoading">
+      <div class="spinner-ring"></div>
+      <div class="state-title">Loading results…</div>
+      <div class="state-sub">Fetching extraction data from server</div>
+    </div>
+
+    <!-- Error state -->
+    <div class="state-panel" id="stateError" style="display:none">
+      <svg class="state-icon" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <div class="state-title">Something went wrong</div>
+      <div class="state-sub" id="errorMsg">Could not load results.</div>
+      <a class="btn-primary" href="/" style="margin-top:8px">
+        <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        Back to Upload
+      </a>
+    </div>
+
+    <!-- Results -->
+    <div id="resultsContent" style="display:none">
+
+      <!-- Deal header -->
+      <div class="deal-header">
+        <div class="deal-meta">
+          <div class="deal-eyebrow">Extraction complete</div>
+          <div class="deal-name" id="dealName">Project</div>
+          <div class="deal-pills" id="dealPills"></div>
+        </div>
+        <div class="deal-actions">
+          <button class="btn-ghost" onclick="downloadJSON()">
+            <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download JSON
+          </button>
+        </div>
+      </div>
+
+      <!-- Financial table sections -->
+      <div class="sections" id="tableSections"></div>
+
+      <!-- Raw JSON -->
+      <div class="json-section" id="jsonSection" style="display:none">
+        <button class="json-toggle" onclick="toggleJson()">
+          <span>Raw JSON</span>
+          <svg class="json-toggle-icon" id="jsonToggleIcon" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="json-body" id="jsonBody">
+          <pre class="json-pre" id="jsonPre"></pre>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+</div>
+
+<script>
+/* ─── Field config ─────────────────────────────────────────────────────── */
+const FIELD_META = {
+  Total_Revenue:    { label: "Net Revenue",             key: "Row 7",  rule: "Rule 2" },
+  Gross_Margin:     { label: "Gross Margin",            key: "Row 10", rule: "Rule 3" },
+  SGA:              { label: "SG&A",                    key: "Row 13", rule: "Rule 9" },
+  Operating_Income: { label: "Operating Income",        key: "Row 15", rule: "Rule 10", nested: true },
+  Adj_EBITDA:       { label: "Adj. EBITDA",             key: "Row 18", rule: "Rule 11" },
+  EBITDA:           { label: "EBITDA (Reported)",       key: "Ref",    rule: "Rule 12" },
+  Other_Expense:    { label: "Other Expense / (Income)",key: "Row 21", rule: "Rule 13" },
+  Interest_Expense: { label: "Interest Expense",        key: "Row 22", rule: "Rule 14" },
+  Depreciation:     { label: "Depreciation & Amort.",   key: "Row 23", rule: "Rule 15" },
+  CAPEX:            { label: "Capital Expenditure",     key: "Row 32", rule: "Rule 16" },
+  WC_Change:        { label: "Working Capital Change",  key: "Row 33", rule: "Rule 17" },
+  AR:               { label: "Accounts Receivable",     key: "C7",     rule: "Rule 18", single: true },
+  Inventory:        { label: "Inventory",               key: "C8",     rule: "Rule 19", single: true },
+};
+
+const SECTION_GROUPS = [
+  { label: "Revenue & Margins",  fields: ["Total_Revenue","Gross_Margin","SGA"] },
+  { label: "Operating Metrics",  fields: ["Operating_Income","Adj_EBITDA","EBITDA"] },
+  { label: "Below-the-Line",     fields: ["Other_Expense","Interest_Expense","Depreciation"] },
+  { label: "Capital & Liquidity",fields: ["CAPEX","WC_Change"] },
+  { label: "Balance Sheet (Sources)", fields: ["AR","Inventory"] },
+];
+
+/* ─── State ────────────────────────────────────────────────────────────── */
+let rawData = null, jobId = null, jobMeta = {};
+
+/* ─── Init ─────────────────────────────────────────────────────────────── */
+window.addEventListener("DOMContentLoaded", async () => {
+  const params = new URLSearchParams(window.location.search);
+  jobId = params.get("job");
+  if (!jobId) { showError("No job ID found in URL. Please start a new extraction."); return; }
+  await loadResults();
+});
+
+async function loadResults() {
+  try {
+    const r = await fetch(`/api/result/${jobId}`);
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      showError(d.error || `Server returned ${r.status}`);
+      return;
+    }
+    const d = await r.json();
+    rawData = d.raw;
+    jobMeta = { deal_name: d.deal_name, deal_value: d.deal_value, filename: d.filename };
+    renderResults();
+  } catch(e) {
+    showError(String(e));
+  }
+}
+
+/* ─── Render ───────────────────────────────────────────────────────────── */
+function renderResults() {
+  document.getElementById("stateLoading").style.display = "none";
+  document.getElementById("resultsContent").style.display = "block";
+  document.getElementById("btnDownload").style.display = "flex";
+
+  /* Deal header */
+  const name = jobMeta.deal_name || jobMeta.filename || "Unnamed Deal";
+  const nameEl = document.getElementById("dealName");
+  /* Make last word italic gold if multiple words */
+  const parts = name.trim().split(" ");
+  if (parts.length > 1) {
+    nameEl.innerHTML = parts.slice(0,-1).join(" ") + " <em>" + escHtml(parts[parts.length-1]) + "</em>";
+  } else {
+    nameEl.textContent = name;
+  }
+
+  const pills = document.getElementById("dealPills");
+  if (jobMeta.filename) {
+    pills.innerHTML += `<span class="pill pill-file"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>${escHtml(jobMeta.filename)}</span>`;
+  }
+  if (jobMeta.deal_value) {
+    pills.innerHTML += `<span class="pill pill-value">$${escHtml(jobMeta.deal_value)}</span>`;
+  }
+  const fieldCount = Object.keys(rawData || {}).length;
+  pills.innerHTML += `<span class="pill pill-fields">${fieldCount} fields extracted</span>`;
+
+  /* Build year columns */
+  const years = collectYears(rawData);
+
+  /* Sections */
+  const sections = document.getElementById("tableSections");
+  sections.innerHTML = "";
+  SECTION_GROUPS.forEach(grp => {
+    /* Check if all fields in this group are single-value */
+    const allSingle = grp.fields.every(f => FIELD_META[f] && FIELD_META[f].single);
+
+    const wrap = document.createElement("div");
+    wrap.className = "section-wrap";
+    wrap.innerHTML = `<div class="section-label">${escHtml(grp.label)}</div>`;
+
+    const scrollWrap = document.createElement("div");
+    scrollWrap.className = "table-scroll";
+    if (allSingle) {
+      scrollWrap.appendChild(buildSourcesTable(grp.fields));
+    } else {
+      scrollWrap.appendChild(buildTable(grp.fields, years));
+    }
+    wrap.appendChild(scrollWrap);
+    sections.appendChild(wrap);
+  });
+
+  /* Special non-tabular sections */
+  if (rawData.Market_Intelligence !== undefined) {
+    sections.appendChild(buildMarketIntelligenceSection(rawData.Market_Intelligence));
+  }
+  if (rawData.Investment_Recommendation !== undefined) {
+    sections.appendChild(buildInvestmentRecommendationSection(rawData.Investment_Recommendation));
+  }
+  if (rawData.Company_Summary !== undefined) {
+    sections.appendChild(buildCompanySummarySection(rawData.Company_Summary));
+  }
+
+  /* Raw JSON */
+  const jsonSection = document.getElementById("jsonSection");
+  jsonSection.style.display = "block";
+  document.getElementById("jsonPre").innerHTML = syntaxHighlight(JSON.stringify(rawData, null, 2));
+}
+
+/* ─── Sources table (single-value fields: AR, Inventory) ──────────────── */
+function buildSourcesTable(fields) {
+  const table = document.createElement("table");
+  table.className = "sources-table";
+
+  /* HEAD */
+  const thead = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  const thField = document.createElement("th"); thField.textContent = "Field"; headRow.appendChild(thField);
+  const thVal   = document.createElement("th"); thVal.textContent = "Latest Actual Value"; headRow.appendChild(thVal);
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  /* BODY */
+  const tbody = document.createElement("tbody");
+  fields.forEach(fieldKey => {
+    const meta = FIELD_META[fieldKey] || { label: fieldKey, key: "" };
+    const data = rawData ? rawData[fieldKey] : undefined;
+    const tr = document.createElement("tr");
+
+    /* Field cell */
+    const tdF = document.createElement("td");
+    tdF.innerHTML = `<div class="td-field">
+      <span class="td-field-name">${meta.label}</span>
+      <span class="td-field-key">${escHtml(fieldKey)} · ${meta.key}</span>
+    </div>`;
+    tr.appendChild(tdF);
+
+    /* Value cell */
+    const tdV = document.createElement("td");
+    if (data !== undefined && data !== null) {
+      /* Find the year key this value came from — scan rawData for matching year */
+      const yearTag = getLatestYearTag(fieldKey);
+      tdV.innerHTML = `<span class="sources-val">${escHtml(formatVal(data))}</span>${yearTag ? `<span class="sources-year-tag">${escHtml(yearTag)}</span>` : ""}`;
+    } else {
+      tdV.innerHTML = `<span class="sources-val null">—</span>`;
+    }
+    tr.appendChild(tdV);
+    tbody.appendChild(tr);
+  });
+
+  table.appendChild(tbody);
+  return table;
+}
+
+/* Attempt to find the year label the single value was drawn from */
+function getLatestYearTag(fieldKey) {
+  /* The raw JSON for AR/Inventory is a scalar, not year-keyed.
+     Scan other year-keyed fields to guess the latest actual year. */
+  const allYears = collectYears(rawData);
+  const actuals = allYears.filter(y => y.endsWith("_A"));
+  if (actuals.length === 0) return "";
+  const latest = actuals[actuals.length - 1];
+  return latest.replace("_A","") + "A";
+}
+
+/* ─── Build table ──────────────────────────────────────────────────────── */
+function buildTable(fields, years) {
+  const table = document.createElement("table");
+  table.className = "fin-table";
+
+  /* HEAD */
+  const thead = document.createElement("thead");
+  const headRow = document.createElement("tr");
+
+  const thField = document.createElement("th");
+  thField.className = "col-field";
+  thField.textContent = "Field";
+  headRow.appendChild(thField);
+
+  years.forEach(yr => {
+    const th = document.createElement("th");
+    th.className = `col-year ${colClass(yr)}`;
+    th.innerHTML = buildYearLabel(yr);
+    headRow.appendChild(th);
+  });
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  /* BODY */
+  const tbody = document.createElement("tbody");
+  fields.forEach(fieldKey => {
+    const meta = FIELD_META[fieldKey] || { label: fieldKey, key: "", rule: "" };
+    const data = rawData ? rawData[fieldKey] : undefined;
+    const tr = document.createElement("tr");
+
+    /* Field name cell */
+    const tdF = document.createElement("td");
+    tdF.innerHTML = `
+      <div class="td-field">
+        <span class="td-field-name">${meta.label}</span>
+        <span class="td-field-key">${escHtml(fieldKey)} · ${meta.key}</span>
+      </div>`;
+    tr.appendChild(tdF);
+
+    {
+      /* Year-keyed field */
+      years.forEach(yr => {
+        const td = document.createElement("td");
+        const isProjected = yr.includes("_E");
+        const isTTM = yr.startsWith("TTM");
+        const addCls = isProjected ? " projected-col" : isTTM ? " ttm-col" : "";
+        if (isProjected) td.classList.add("projected-col");
+
+        if (!data) {
+          td.className = `td-val null${addCls}`;
+          td.textContent = "—";
+        } else if (meta.nested) {
+          /* Operating_Income: {value, source, formula, confidence} */
+          const v = data[yr];
+          if (v === null || v === undefined) {
+            td.className = `td-val null${addCls}`;
+            td.textContent = "—";
+          } else if (typeof v === "object") {
+            const val = v.value;
+            const conf = v.confidence || "";
+            const confBadge = conf ? `<span class="conf-badge conf-${conf.toLowerCase()}">${conf}</span>` : "";
+            const isNeg = typeof val === "number" && val < 0;
+            const valStr = val !== null && val !== undefined ? formatVal(val) : "—";
+            const negCls = isNeg ? " negative" : "";
+            td.innerHTML = `
+              <div class="val-wrap">
+                <span class="val-main${negCls}">${escHtml(valStr)}</span>
+                ${conf ? `<span class="val-meta">${confBadge}</span>` : ""}
+              </div>`;
+          } else {
+            const isNeg = typeof v === "number" && v < 0;
+            td.className = `td-val${isNeg?" negative":""}${addCls}`;
+            td.textContent = formatVal(v);
+          }
+        } else {
+          const v = data[yr];
+          if (v === null || v === undefined) {
+            td.className = `td-val null${addCls}`;
+            td.textContent = "—";
+          } else {
+            const isNeg = typeof v === "number" && v < 0;
+            td.className = `td-val${isNeg?" negative":""}${addCls}`;
+            td.textContent = formatVal(v);
+          }
+        }
+        tr.appendChild(td);
+      });
+    }
+
+    tbody.appendChild(tr);
+  });
+
+  table.appendChild(tbody);
+  return table;
+}
+
+/* ─── Market Intelligence section ─────────────────────────────────────── */
+function buildMarketIntelligenceSection(data) {
+  const wrap = document.createElement("div");
+  wrap.className = "section-wrap";
+  wrap.innerHTML = `<div class="section-label">Market Intelligence</div>`;
+
+  const card = document.createElement("div");
+  card.className = "intel-card";
+
+  function makeRow(label, contentFn) {
+    const row = document.createElement("div");
+    row.className = "intel-row";
+    const lbl = document.createElement("div");
+    lbl.className = "intel-label";
+    lbl.textContent = label;
+    row.appendChild(lbl);
+    row.appendChild(contentFn());
+    return row;
+  }
+
+  /* Competitors */
+  card.appendChild(makeRow("Competitors", () => {
+    const val = document.createElement("div");
+    const comps = data && Array.isArray(data.competitors) && data.competitors.length > 0 ? data.competitors : null;
+    if (comps) {
+      val.className = "intel-val";
+      const chips = document.createElement("div");
+      chips.className = "competitor-chips";
+      comps.forEach(c => {
+        const chip = document.createElement("span");
+        chip.className = "competitor-chip";
+        chip.textContent = c;
+        chips.appendChild(chip);
+      });
+      val.appendChild(chips);
+    } else {
+      val.className = "intel-val null";
+      val.textContent = "—";
+    }
+    return val;
+  }));
+
+  /* Market Size */
+  card.appendChild(makeRow("Market Size", () => {
+    const val = document.createElement("div");
+    const v = data && data.market_size;
+    val.className = "intel-val" + (v ? "" : " null");
+    val.textContent = v || "—";
+    return val;
+  }));
+
+  /* Growth Rate */
+  card.appendChild(makeRow("Market Growth Rate", () => {
+    const val = document.createElement("div");
+    const v = data && data.market_growth_rate;
+    val.className = "intel-val" + (v ? "" : " null");
+    val.textContent = v || "—";
+    return val;
+  }));
+
+  wrap.appendChild(card);
+  return wrap;
+}
+
+/* ─── Investment Recommendation section ───────────────────────────────── */
+function buildInvestmentRecommendationSection(data) {
+  const wrap = document.createElement("div");
+  wrap.className = "section-wrap";
+  wrap.innerHTML = `<div class="section-label">Investment Recommendation</div>`;
+
+  const card = document.createElement("div");
+  card.className = "rec-card";
+
+  if (!data || typeof data !== "object") {
+    const row = document.createElement("div");
+    row.className = "intel-row";
+    row.innerHTML = `<div class="intel-val null">No recommendation generated — provide a deal value to enable this.</div>`;
+    card.appendChild(row);
+    wrap.appendChild(card);
+    return wrap;
+  }
+
+  /* Header: verdict + confidence badge */
+  const verdict = data.verdict || "—";
+  const verdictClassMap = {
+    "Strong Buy": "verdict-strong-buy",
+    "Buy": "verdict-buy",
+    "Caution": "verdict-caution",
+    "Pass": "verdict-pass",
+    "Insufficient Data": "verdict-insufficient"
+  };
+  const vClass = verdictClassMap[verdict] || "verdict-insufficient";
+
+  const conf = data.confidence || "";
+  const confClassMap = { "High": "badge-conf-high", "Medium": "badge-conf-medium", "Low": "badge-conf-low" };
+  const cClass = confClassMap[conf] || "badge-conf-low";
+
+  const header = document.createElement("div");
+  header.className = "rec-header";
+  header.innerHTML = `
+    <div class="rec-verdict ${vClass}">${escHtml(verdict)}</div>
+    <div class="rec-badges">
+      ${conf ? `<span class="rec-badge ${cClass}">Confidence: ${escHtml(conf)}</span>` : ""}
+    </div>`;
+  card.appendChild(header);
+
+  /* Multiples */
+  const evEbitda = data.ev_ebitda_multiple != null;
+  const evRev    = data.ev_revenue_multiple != null;
+  const multiples = document.createElement("div");
+  multiples.className = "rec-multiples";
+  multiples.innerHTML = `
+    <div class="rec-multiple-item">
+      <span class="rec-multiple-label">EV / EBITDA</span>
+      <span class="rec-multiple-val${evEbitda ? "" : " null"}">${evEbitda ? escHtml(String(data.ev_ebitda_multiple)) + "x" : "—"}</span>
+    </div>
+    <div class="rec-multiple-item">
+      <span class="rec-multiple-label">EV / Revenue</span>
+      <span class="rec-multiple-val${evRev ? "" : " null"}">${evRev ? escHtml(String(data.ev_revenue_multiple)) + "x" : "—"}</span>
+    </div>`;
+  card.appendChild(multiples);
+
+  /* Positives + Risks grid */
+  const body = document.createElement("div");
+  body.className = "rec-body";
+
+  function makeListCol(title, titleClass, items, listClass) {
+    const col = document.createElement("div");
+    col.className = "rec-col";
+    const t = document.createElement("div");
+    t.className = `rec-col-title ${titleClass}`;
+    t.textContent = title;
+    col.appendChild(t);
+    const ul = document.createElement("ul");
+    ul.className = `rec-list ${listClass}`;
+    if (items && items.length > 0) {
+      items.forEach(item => {
+        const li = document.createElement("li");
+        li.textContent = item;
+        ul.appendChild(li);
+      });
+    } else {
+      const li = document.createElement("li");
+      li.style.cssText = "color:var(--silver-faint);font-style:italic";
+      li.textContent = "None identified";
+      ul.appendChild(li);
+    }
+    col.appendChild(ul);
+    return col;
+  }
+
+  body.appendChild(makeListCol("Key Positives", "positive", data.key_positives, "positive"));
+  body.appendChild(makeListCol("Key Risks",     "risk",     data.key_risks,     "risk"));
+  card.appendChild(body);
+
+  /* Data Gaps */
+  const gaps = data.data_gaps;
+  if (gaps && gaps.length > 0) {
+    const gapsRow = document.createElement("div");
+    gapsRow.className = "rec-data-gaps";
+    gapsRow.innerHTML = `<span class="rec-data-gaps-label">Data Gaps</span>`;
+    gaps.forEach(g => {
+      const tag = document.createElement("span");
+      tag.className = "gap-tag";
+      tag.textContent = g;
+      gapsRow.appendChild(tag);
+    });
+    card.appendChild(gapsRow);
+  }
+
+  /* Rationale */
+  if (data.rationale) {
+    const rat = document.createElement("div");
+    rat.className = "rec-rationale";
+    rat.innerHTML = `<div class="rec-rationale-label">Analyst Rationale</div>${escHtml(data.rationale)}`;
+    card.appendChild(rat);
+  }
+
+  wrap.appendChild(card);
+  return wrap;
+}
+
+/* ─── Company Summary section ─────────────────────────────────────────── */
+function buildCompanySummarySection(data) {
+  const wrap = document.createElement("div");
+  wrap.className = "section-wrap";
+  wrap.innerHTML = `<div class="section-label">Company Summary</div>`;
+
+  const card = document.createElement("div");
+  card.className = "summary-card";
+
+  const p = document.createElement("p");
+  if (data && typeof data === "string" && data.trim().length > 0) {
+    p.className = "summary-text";
+    p.textContent = data;
+  } else {
+    p.className = "summary-text null";
+    p.textContent = "—";
+  }
+  card.appendChild(p);
+  wrap.appendChild(card);
+  return wrap;
+}
+
+/* ─── Helpers ──────────────────────────────────────────────────────────── */
+function collectYears(data) {
+  if (!data) return [];
+  const yearsSet = new Set();
+  Object.values(data).forEach(v => {
+    if (v && typeof v === "object" && !Array.isArray(v)) {
+      Object.keys(v).forEach(k => {
+        /* Skip Operating_Income sub-keys (value/source/formula/confidence) */
+        if (["value","source","formula","confidence"].includes(k)) return;
+        /* Check if nested (Operating Income values are objects with those keys) */
+        if (typeof v[k] === "object" && v[k] !== null && "value" in v[k]) {
+          yearsSet.add(k);
+        } else if (k.match(/^\d{4}_(A|E)$|^TTM_\d{4}$|^TTM$/)) {
+          yearsSet.add(k);
+        }
+      });
+    }
+  });
+
+  const actuals    = [...yearsSet].filter(y => y.endsWith("_A")).sort();
+  const ttm        = [...yearsSet].filter(y => y.startsWith("TTM")).sort();
+  const projected  = [...yearsSet].filter(y => y.endsWith("_E")).sort();
+  return [...actuals, ...ttm, ...projected];
+}
+
+function colClass(yr) {
+  if (yr.startsWith("TTM")) return "ttm-col";
+  if (yr.endsWith("_E"))    return "projected-col";
+  return "actual-col";
+}
+
+function buildYearLabel(yr) {
+  let year, badge, badgeCls;
+  if (yr.startsWith("TTM")) {
+    year = yr; badge = "TTM"; badgeCls = "badge-ttm";
+  } else if (yr.endsWith("_A")) {
+    year = yr.replace("_A",""); badge = "A"; badgeCls = "badge-a";
+  } else if (yr.endsWith("_E")) {
+    year = yr.replace("_E",""); badge = "E"; badgeCls = "badge-e";
+  } else {
+    year = yr; badge = ""; badgeCls = "";
+  }
+  return `<div class="year-label">
+    <span class="year-year">${escHtml(year)}</span>
+    ${badge ? `<span class="year-badge ${badgeCls}">${badge}</span>` : ""}
+  </div>`;
+}
+
+function formatVal(v) {
+  if (v === null || v === undefined) return "—";
+  if (typeof v === "number") {
+    const abs = Math.abs(v);
+    const sign = v < 0 ? "(" : "";
+    const end  = v < 0 ? ")" : "";
+    if (abs >= 1000000) return sign + (abs/1000000).toFixed(1) + "M" + end;
+    if (abs >= 1000)    return sign + abs.toLocaleString("en-US") + end;
+    return sign + abs.toFixed(0) + end;
+  }
+  return String(v);
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;");
+}
+
+function showError(msg) {
+  document.getElementById("stateLoading").style.display = "none";
+  document.getElementById("stateError").style.display = "flex";
+  document.getElementById("errorMsg").textContent = msg;
+}
+
+function toggleJson() {
+  const body = document.getElementById("jsonBody");
+  const icon = document.getElementById("jsonToggleIcon");
+  body.classList.toggle("open");
+  icon.classList.toggle("open");
+}
+
+function syntaxHighlight(json) {
+  return json
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, m => {
+      if (/^"/.test(m)) {
+        if (/:$/.test(m)) return `<span class="key">${m}</span>`;
+        return `<span class="str">${m}</span>`;
+      }
+      if (/null/.test(m)) return `<span class="null">${m}</span>`;
+      if (/true|false/.test(m)) return `<span class="bool">${m}</span>`;
+      return `<span class="num">${m}</span>`;
+    });
+}
+
+/* ─── Download ─────────────────────────────────────────────────────────── */
+function downloadJSON() {
+  if (!jobId) return;
+  window.location.href = `/api/download/${jobId}`;
+}
+</script>
+</body>
+</html>
