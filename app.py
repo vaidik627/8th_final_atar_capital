@@ -440,6 +440,16 @@ def api_download_excel(job_id):
     if inv is not None and not isinstance(inv, dict):
         ws["C8"] = inv
 
+    # C9 — Machinery & Equipment (single scalar)
+    me = raw.get("ME_Equipment")
+    if me is not None and not isinstance(me, dict):
+        ws["C9"] = me
+
+    # C11 — Building & Land (single scalar)
+    bl = raw.get("Building_Land")
+    if bl is not None and not isinstance(bl, dict):
+        ws["C11"] = bl
+
     # ── Serialize and return ────────────────────────────────────────────────
     out = io.BytesIO()
     wb.save(out)

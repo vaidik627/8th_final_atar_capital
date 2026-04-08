@@ -63,27 +63,88 @@ class CIMParser:
     # Pages with fewer chars are treated as image-heavy and sent to Google Vision OCR.
     _OCR_TEXT_THRESHOLD = 80
 
-    def __init__(self, pdf_path: str, gcv_key_path: str = None):
+    def __init__(self, pdf_path: str, gcv_key_path: str = None, gcv_api_key: str = None):
         self.pdf_path = pdf_path
         self.extracted_text = []
         self.extracted_tables = []
-        self._gcv_client = None
+        self._gcv_client = None       # service account client
+        self._gcv_api_key = None      # simple API key (REST)
 
         if not os.path.exists(pdf_path):
             raise FileNotFoundError(f"PDF not found at {pdf_path}")
 
+        # Service account JSON path (existing method)
         if gcv_key_path:
             if not _GCV_AVAILABLE:
-                logging.warning("google-cloud-vision or pdf2image not installed — OCR disabled.")
+                logging.warning("google-cloud-vision or PyMuPDF not installed — OCR disabled.")
             elif not os.path.exists(gcv_key_path):
                 logging.warning(f"GCV key file not found at {gcv_key_path} — OCR disabled.")
             else:
                 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = gcv_key_path
                 self._gcv_client = _gcv.ImageAnnotatorClient()
-                logging.info("Google Cloud Vision OCR enabled.")
+                logging.info("Google Cloud Vision OCR enabled (service account).")
+
+        # Simple API key (REST endpoint method)
+        elif gcv_api_key:
+            if not _GCV_AVAILABLE:
+                logging.warning("PyMuPDF not installed — OCR disabled.")
+            else:
+                self._gcv_api_key = gcv_api_key
+                logging.info("Google Cloud Vision OCR enabled (API key).")
+
+    def _ocr_page_api_key(self, page_num: int) -> str:
+        """Render PDF page to PNG via PyMuPDF, send to Vision REST API using simple API key."""
+        import base64, urllib.request, urllib.error
+        try:
+            doc = _fitz.open(self.pdf_path)
+            try:
+                page = doc[page_num - 1]
+                mat = _fitz.Matrix(200 / 72, 200 / 72)  # 200 DPI
+                pix = page.get_pixmap(matrix=mat)
+                content = pix.tobytes("png")
+            finally:
+                doc.close()
+
+            # Encode image as base64 for REST API
+            image_b64 = base64.b64encode(content).decode("utf-8")
+
+            # Build REST request body
+            request_body = json.dumps({
+                "requests": [{
+                    "image": {"content": image_b64},
+                    "features": [{"type": "DOCUMENT_TEXT_DETECTION"}]
+                }]
+            }).encode("utf-8")
+
+            url = f"https://vision.googleapis.com/v1/images:annotate?key={self._gcv_api_key}"
+            req = urllib.request.Request(
+                url, data=request_body,
+                headers={"Content-Type": "application/json"},
+                method="POST"
+            )
+
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                result = json.loads(resp.read().decode("utf-8"))
+
+            responses = result.get("responses", [])
+            if not responses:
+                return ""
+            annotation = responses[0].get("fullTextAnnotation", {})
+            return annotation.get("text", "")
+
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8") if e.fp else ""
+            logging.warning(f"GCV API key OCR HTTP error on page {page_num}: {e.code} {body[:200]}")
+            return ""
+        except Exception as e:
+            logging.warning(f"GCV API key OCR failed on page {page_num}: {e}")
+            return ""
 
     def _ocr_page(self, page_num: int) -> str:
         """Render a single PDF page to PNG via PyMuPDF and run Google Vision OCR on it."""
+        # Route to API key method if that's what's configured
+        if self._gcv_api_key:
+            return self._ocr_page_api_key(page_num)
         try:
             doc = _fitz.open(self.pdf_path)
             try:
@@ -203,6 +264,14 @@ class CIMParser:
                 "inventory", "inventories", "inventory, net", "stock",
                 "raw materials", "finished goods", "work in progress", "work-in-progress",
                 "total inventory",
+                # Fixed Asset Schedule keywords (for ME_Equipment and Building_Land extraction)
+                "fixed asset", "fixed assets", "fixed asset schedule",
+                "property, plant", "property plant", "pp&e", "ppe",
+                "machinery & equipment", "machinery and equipment", "m&e",
+                "warehouse equipment", "manufacturing equipment", "production equipment",
+                "plant & equipment", "plant and equipment",
+                "building & land", "building and land", "land and building",
+                "accumulated depreciation", "gross fixed assets", "total fixed assets",
                 # Business overview keywords (for Company_Summary extraction)
                 "business overview", "company overview", "executive summary",
                 "company description", "business description", "business profile",
@@ -812,6 +881,89 @@ class LLMExtractor:
             "     - num_locations: count only distinct physical locations (offices, plants, warehouses). Not virtual/digital.\n"
             "     - If the entire section is absent → output null for the whole Company_KPIs field.\n"
             "     - If only some sub-fields are found, output an object with found values and null for missing ones.\n"
+            "28. MACHINERY & EQUIPMENT (M&E) EXTRACTION LOGIC:\n"
+            "   The gross book value of Machinery & Equipment assets used as ABL collateral (Sources section C9).\n"
+            "   OUTPUT: a SINGLE numeric value — the most recent actual period only (NOT a time series).\n\n"
+            "   STEP 1 — SOURCE TABLE: Find a Fixed Asset Schedule, PP&E Schedule, or Property Plant & Equipment table.\n"
+            "     These tables typically appear in the financial appendix or balance sheet supplemental schedules.\n"
+            "     Look for rows labeled (case-insensitive, accept any of these):\n"
+            "       a) 'Machinery & Equipment' or 'Machinery and Equipment' or 'M&E'\n"
+            "       b) 'Plant & Equipment' or 'Plant and Equipment'\n"
+            "       c) 'Equipment' (standalone row in a fixed asset schedule)\n"
+            "       d) 'Warehouse Equipment' or 'Manufacturing Equipment' or 'Production Equipment'\n"
+            "       e) 'Furniture, Fixtures & Equipment' or 'FF&E' (only if no other M&E row exists)\n"
+            "       f) 'Machinery' (standalone row)\n"
+            "   STEP 2 — PERIOD SELECTION: Identify the MOST RECENT ACTUAL period:\n"
+            "     'Actual' = column labeled with suffix A or a (e.g. 2024A, Dec-24A, FY24A).\n"
+            "     Priority: TTM_YYYY > latest YYYY_A > YYYY_B > YYYY_E (only absolute last resort).\n"
+            "     *** CRITICAL WARNING: Fixed asset schedules often extend 5-8 projected years (E/F/B).\n"
+            "         The LAST column is almost always projected — NEVER use it as most recent.\n"
+            "         Example: columns = 2022A, 2023A, 2024A, 2025B, 2026E ... 2030E\n"
+            "         → most recent actual = 2024A (third column), NOT 2030E (last column). ***\n"
+            "   STEP 3 — VALUE SELECTION:\n"
+            "     a) Use GROSS value (before depreciation/accumulated amortization) if the schedule shows both\n"
+            "        gross and net. Gross value = the original cost, before any write-downs.\n"
+            "     b) If only NET value (after depreciation) is shown, use net and note it is net.\n"
+            "     c) If the row is broken into sub-components (e.g. 'Warehouse Equipment' and 'Office Equipment'\n"
+            "        separately), use the individual row for the best M&E match — do NOT sum them.\n"
+            "     d) If a 'Total Fixed Assets' or 'Total PP&E' subtotal row exists — NEVER use it for this field.\n"
+            "        Always use the individual M&E row only.\n"
+            "   HARD RULES:\n"
+            "     - SOURCE: Fixed Asset Schedule / PP&E Schedule ONLY.\n"
+            "       NEVER extract from: P&L, Income Statement, Cash Flow Statement, CAPEX tables,\n"
+            "       narrative text, bullet points, charts, or appraisal summaries (unless they explicitly\n"
+            "       state a book value for M&E as a standalone line).\n"
+            "     - NEVER use CAPEX line items (e.g. 'Warehouse Equipment $864' from a CAPEX table)\n"
+            "       as M&E — CAPEX rows are annual spending amounts, not asset balances.\n"
+            "     - NEVER sum multiple rows to create M&E — use only the single best-matching row.\n"
+            "     - NEVER extract 'Office Furniture & Equipment' or 'Leasehold Improvements' as M&E\n"
+            "       unless no other M&E row exists anywhere in the document.\n"
+            "     - NEVER extract 'Total Fixed Assets (Gross)' or 'Total Fixed Assets (Net)' — that is\n"
+            "       the total, not M&E. We need the M&E line item only.\n"
+            "     - A value of 0 (zero) is valid — output 0, not null.\n"
+            "     - Normalise to $000s. If document is in $M, multiply by 1000. If CAD, output as-is.\n"
+            "     - If no M&E row exists in any fixed asset schedule → output null.\n"
+            "     - Output ONE single number. Format: \"ME_Equipment\": 14067\n\n"
+            "29. BUILDING & LAND EXTRACTION LOGIC:\n"
+            "   The gross book value of Building & Land real estate assets used as ABL collateral (Sources section C11).\n"
+            "   OUTPUT: a SINGLE numeric value — the most recent actual period only (NOT a time series).\n\n"
+            "   STEP 1 — SOURCE TABLE: Find a Fixed Asset Schedule, PP&E Schedule, or Property Plant & Equipment table.\n"
+            "     Look for rows labeled (case-insensitive, accept any of these):\n"
+            "       a) 'Building & Land' or 'Building and Land' or 'Buildings & Land'\n"
+            "       b) 'Building' (standalone row — distinct from 'Building Improvements')\n"
+            "       c) 'Land' (standalone row)\n"
+            "       d) 'Real Estate' or 'Property' (standalone row in a fixed asset schedule)\n"
+            "       e) 'Land and Building' or 'Land & Buildings'\n"
+            "       f) 'Leasehold' or 'Leasehold Property' (only if company owns the property, not renting)\n"
+            "     IMPORTANT DISTINCTION:\n"
+            "       'Building Improvements' or 'Leasehold Improvements' is NOT the same as 'Building'.\n"
+            "       Building Improvements = renovation/upgrade costs (tenant improvements).\n"
+            "       Building = the actual owned real property (structure + land value).\n"
+            "       ONLY extract 'Building Improvements' if NO 'Building' or 'Land' row exists AND the company\n"
+            "       clearly owns the property (not a tenant). Otherwise output null for Building & Land.\n"
+            "   STEP 2 — PERIOD SELECTION: Identify the MOST RECENT ACTUAL period:\n"
+            "     'Actual' = column labeled with suffix A or a (e.g. 2024A, Dec-24A).\n"
+            "     Priority: TTM_YYYY > latest YYYY_A > YYYY_B > YYYY_E.\n"
+            "     *** CRITICAL WARNING: Same as M&E — the last column in a fixed asset table is almost\n"
+            "         always projected. Scan LEFT from the right to find the last 'A'-suffixed column. ***\n"
+            "   STEP 3 — VALUE SELECTION:\n"
+            "     a) Use GROSS value (before accumulated depreciation) if both gross and net are shown.\n"
+            "     b) If 'Building' and 'Land' are on SEPARATE rows — add them together for Building_Land output.\n"
+            "        EXCEPTION: if only one of the two rows has a value and the other is null/zero, use the available one.\n"
+            "     c) If only NET (post-depreciation) value is available, use net.\n"
+            "     d) NEVER use 'Total Fixed Assets' subtotal — use the Building/Land individual rows only.\n"
+            "   HARD RULES:\n"
+            "     - SOURCE: Fixed Asset Schedule / PP&E Schedule ONLY.\n"
+            "       NEVER extract from: P&L, CAPEX tables, narrative descriptions, facility square footage tables,\n"
+            "       real estate listings, or appraisal summaries (unless they state a book value for building/land).\n"
+            "     - NEVER confuse 'Building Improvements' with 'Building' — they are different rows.\n"
+            "       Building Improvements = tenant improvements (capex spend); Building = owned asset book value.\n"
+            "     - NEVER extract square footage, number of locations, or lease terms as Building & Land value.\n"
+            "     - NEVER extract from a real estate overview table (which lists sq footage and headcount per site).\n"
+            "     - A value of 0 (zero) is valid — output 0, not null.\n"
+            "     - Normalise to $000s. If document is in $M, multiply by 1000. If CAD, output as-is.\n"
+            "     - If no Building or Land row exists in any fixed asset schedule → output null.\n"
+            "     - Output ONE single number. Format: \"Building_Land\": 3250\n"
             "27. GROWTH INITIATIVES EXTRACTION LOGIC:\n"
             "   Extract the company's key strategic growth initiatives or pillars.\n"
             "   OUTPUT: array of objects — [{\"title\": \"Short Title\", \"description\": \"1-2 sentence summary\", \"impact\": \"$ or % figure or null\"}, ...]\n"
@@ -943,6 +1095,19 @@ class LLMExtractor:
             "  NEVER use projected (E/B/F) columns. Table may extend to 2030E — use only the last actual column.\n"
             "  Zero (0) is valid for service businesses. Use Total Inventory subtotal if broken into components.\n"
             "  NEVER extract from narrative text or cash flow movements — balance sheet/NWC table only.\n"
+            "  \"ME_Equipment\": single_number_or_null,\n"
+            "  NOTE for ME_Equipment: ONE single value — gross book value from Fixed Asset / PP&E Schedule only.\n"
+            "  Most recent ACTUAL period (last 'A'-suffixed column). NEVER use projected columns.\n"
+            "  NEVER use Total Fixed Assets subtotal. NEVER use CAPEX table values.\n"
+            "  Labels: 'Machinery & Equipment', 'M&E', 'Plant & Equipment', 'Warehouse Equipment', 'Equipment' (standalone in PP&E).\n"
+            "  Normalise to $000s. Output null if no M&E row found in any fixed asset schedule.\n"
+            "  \"Building_Land\": single_number_or_null,\n"
+            "  NOTE for Building_Land: ONE single value — gross book value from Fixed Asset / PP&E Schedule only.\n"
+            "  Most recent ACTUAL period (last 'A'-suffixed column). NEVER use projected columns.\n"
+            "  NEVER use Total Fixed Assets subtotal. NEVER confuse 'Building Improvements' with 'Building'.\n"
+            "  If 'Building' and 'Land' are separate rows — ADD them together for this field.\n"
+            "  Labels: 'Building & Land', 'Building', 'Land', 'Real Estate', 'Property' (standalone in PP&E schedule).\n"
+            "  Normalise to $000s. Output null if no Building or Land row found in any fixed asset schedule.\n"
             "  \"Market_Intelligence\": {\n"
             "    \"market_size\": \"string with figure + units + year\" or null,\n"
             "    \"market_growth_rate\": \"string with CAGR + horizon\" or null,\n"
@@ -1342,7 +1507,33 @@ DEFAULT_CLIENT_REQ = (
             "   countries_of_operation (int), capacity_utilization (string e.g. '~60%').\n"
             "   Source: company overview, 'by the numbers' box, facilities section, intro pages.\n"
             "   All scalars — NOT time series. founded_year = original founding, not PE acquisition year.\n"
-            "   If section absent → null. If partial → object with nulls for missing sub-fields.\n\n"
+            "   If section absent → null. If partial → object with nulls for missing sub-fields.\n"
+            "21) ME_Equipment — Gross book value of Machinery & Equipment assets. Follow Rule 28.\n"
+            "   SOURCE: Fixed Asset Schedule / PP&E Schedule ONLY — never CAPEX table, P&L, or narrative.\n"
+            "   OUTPUT: ONE single number — most recent ACTUAL period (last 'A'-suffixed column).\n"
+            "   VALID labels: 'Machinery & Equipment', 'M&E', 'Plant & Equipment', 'Warehouse Equipment',\n"
+            "   'Manufacturing Equipment', 'Production Equipment', 'Equipment' (standalone in PP&E table).\n"
+            "   Use GROSS value (before accumulated depreciation) if both gross and net are shown.\n"
+            "   NEVER use 'Total Fixed Assets' or any subtotal row — individual M&E row only.\n"
+            "   NEVER extract CAPEX spending amounts (e.g. annual capex rows) as M&E book value.\n"
+            "   NEVER sum multiple asset rows — use the single best-matching M&E row only.\n"
+            "   Period warning: fixed asset tables often extend to 2030E — most recent actual is NOT\n"
+            "   the last column. Scan left to find the last 'A'-suffixed column.\n"
+            "   Normalise to $000s. Output null if not found in any fixed asset schedule.\n"
+            "22) Building_Land — Gross book value of Building & Land real estate assets. Follow Rule 29.\n"
+            "   SOURCE: Fixed Asset Schedule / PP&E Schedule ONLY — never CAPEX table, P&L, or narrative.\n"
+            "   OUTPUT: ONE single number — most recent ACTUAL period (last 'A'-suffixed column).\n"
+            "   VALID labels: 'Building & Land', 'Building and Land', 'Building', 'Land', 'Real Estate',\n"
+            "   'Property' (standalone in PP&E), 'Land and Building'.\n"
+            "   CRITICAL DISTINCTION: 'Building Improvements' ≠ 'Building'.\n"
+            "   'Building Improvements' = tenant renovation costs. 'Building' = owned real property.\n"
+            "   Only use 'Building Improvements' if NO 'Building' or 'Land' row exists AND company owns property.\n"
+            "   If 'Building' and 'Land' are SEPARATE rows → ADD them together for a single output value.\n"
+            "   Use GROSS value (before accumulated depreciation) if both gross and net are shown.\n"
+            "   NEVER use 'Total Fixed Assets' or any subtotal row.\n"
+            "   NEVER extract square footage, headcount tables, or lease descriptions as dollar values.\n"
+            "   Period warning: same as ME_Equipment — last column is usually projected, scan left for 'A'.\n"
+            "   Normalise to $000s. Output null if not found in any fixed asset schedule.\n\n"
             "Output all numeric values in $000s (thousands). "
             "If currency is CAD, output as-is without USD conversion. "
             "If a metric does not exist in the document, use null."
@@ -1362,6 +1553,7 @@ def main():
     parser.add_argument("--api-key", type=str, default=None, help="API key (overrides environment variable).")
     parser.add_argument("--deal-value", type=float, default=None, help="Enterprise value / deal price being considered (in USD). If provided, generates an investment recommendation.")
     parser.add_argument("--gcv-key", type=str, default=None, help="Path to Google Cloud Vision service account JSON key. Enables OCR for image-heavy PDF pages.")
+    parser.add_argument("--gcv-api-key", type=str, default=None, help="Google Cloud Vision simple API key. Alternative to --gcv-key. Can also be set via GCV_API_KEY env var.")
     args = parser.parse_args()
 
     # Authentication — --api-key flag takes priority, then environment variable
@@ -1380,7 +1572,10 @@ def main():
 
     # Execution flow
     try:
-        cim = CIMParser(args.pdf, gcv_key_path=args.gcv_key)
+        # GCV API key: --gcv-api-key flag takes priority, then GCV_API_KEY env var
+        gcv_api_key = args.gcv_api_key or os.getenv("GCV_API_KEY", "")
+        gcv_api_key = gcv_api_key if gcv_api_key and gcv_api_key != "your-gcv-api-key-here" else None
+        cim = CIMParser(args.pdf, gcv_key_path=args.gcv_key, gcv_api_key=gcv_api_key)
         cim.parse_pdf()
 
         relevant_sections = cim.find_financial_sections()

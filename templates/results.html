@@ -861,6 +861,8 @@ const FIELD_META = {
   WC_Change:          { label: "Working Capital Change",  key: "Row 33", rule: "Rule 16" },
   AR:                 { label: "Accounts Receivable",     key: "C7",     rule: "Rule 17", single: true },
   Inventory:          { label: "Inventory",               key: "C8",     rule: "Rule 18", single: true },
+  ME_Equipment:       { label: "Machinery & Equipment",   key: "C9",     rule: "Rule 28", single: true },
+  Building_Land:      { label: "Building & Land",         key: "C11",    rule: "Rule 29", single: true },
 };
 
 const SECTION_GROUPS = [
@@ -868,7 +870,7 @@ const SECTION_GROUPS = [
   { label: "Operating Metrics",  fields: ["Adj_EBITDA","EBITDA","Onex_Adjustments"] },
   { label: "Below-the-Line",     fields: ["Other_Expense","Interest_Expense","Depreciation"] },
   { label: "Capital & Liquidity",fields: ["CAPEX","WC_Change"] },
-  { label: "Balance Sheet (Sources)", fields: ["AR","Inventory"] },
+  { label: "Balance Sheet (Sources)", fields: ["AR","Inventory","ME_Equipment","Building_Land"] },
 ];
 
 /* ─── State ────────────────────────────────────────────────────────────── */
@@ -936,6 +938,12 @@ function renderResults() {
     /* Check if all fields in this group are single-value */
     const allSingle = grp.fields.every(f => FIELD_META[f] && FIELD_META[f].single);
 
+    /* Auto-hide single-value groups where ALL values are null */
+    if (allSingle) {
+      const anyPresent = grp.fields.some(f => rawData && rawData[f] != null);
+      if (!anyPresent) return; // skip entire section
+    }
+
     const wrap = document.createElement("div");
     wrap.className = "section-wrap";
     wrap.innerHTML = `<div class="section-label">${escHtml(grp.label)}</div>`;
@@ -943,7 +951,12 @@ function renderResults() {
     const scrollWrap = document.createElement("div");
     scrollWrap.className = "table-scroll";
     if (allSingle) {
-      scrollWrap.appendChild(buildSourcesTable(grp.fields));
+      /* Only pass fields that have data OR are AR/Inventory (always show those) */
+      const visibleFields = grp.fields.filter(f => {
+        const isCore = f === "AR" || f === "Inventory";
+        return isCore || (rawData && rawData[f] != null);
+      });
+      scrollWrap.appendChild(buildSourcesTable(visibleFields));
     } else {
       scrollWrap.appendChild(buildTable(grp.fields, years));
     }
