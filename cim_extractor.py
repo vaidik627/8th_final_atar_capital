@@ -14,6 +14,14 @@ import pandas as pd
 from typing import List, Dict, Any, Optional
 import argparse
 
+# Google Cloud Vision (optional — only used if gcv_key_path provided)
+try:
+    from google.cloud import vision as _gcv
+    import fitz as _fitz  # PyMuPDF — self-contained PDF renderer, no Poppler needed
+    _GCV_AVAILABLE = True
+except ImportError:
+    _GCV_AVAILABLE = False
+
 # Load .env file if present
 def _load_env():
     env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
@@ -30,14 +38,71 @@ _load_env()
 # Configure Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+
+def _extract_json_from_text(text: str) -> str:
+    """
+    Robustly extract JSON from LLM output.
+    Strategy 1: ```json ... ``` fences.
+    Strategy 2: ``` ... ``` fences (no language tag).
+    Strategy 3: find the first '{' and last '}' (raw JSON, no fences).
+    Falls back to returning the original text so json.loads can raise a clear error.
+    """
+    # Strategy 1 & 2 — markdown fences
+    fence = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
+    if fence:
+        return fence.group(1).strip()
+    # Strategy 3 — bare JSON object
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        return text[start:end + 1]
+    return text
+
 class CIMParser:
-    def __init__(self, pdf_path: str):
+    # Minimum character count from pdfplumber to consider a page text-sufficient.
+    # Pages with fewer chars are treated as image-heavy and sent to Google Vision OCR.
+    _OCR_TEXT_THRESHOLD = 80
+
+    def __init__(self, pdf_path: str, gcv_key_path: str = None):
         self.pdf_path = pdf_path
         self.extracted_text = []
         self.extracted_tables = []
-        
+        self._gcv_client = None
+
         if not os.path.exists(pdf_path):
             raise FileNotFoundError(f"PDF not found at {pdf_path}")
+
+        if gcv_key_path:
+            if not _GCV_AVAILABLE:
+                logging.warning("google-cloud-vision or pdf2image not installed — OCR disabled.")
+            elif not os.path.exists(gcv_key_path):
+                logging.warning(f"GCV key file not found at {gcv_key_path} — OCR disabled.")
+            else:
+                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = gcv_key_path
+                self._gcv_client = _gcv.ImageAnnotatorClient()
+                logging.info("Google Cloud Vision OCR enabled.")
+
+    def _ocr_page(self, page_num: int) -> str:
+        """Render a single PDF page to PNG via PyMuPDF and run Google Vision OCR on it."""
+        try:
+            doc = _fitz.open(self.pdf_path)
+            try:
+                page = doc[page_num - 1]              # fitz is 0-indexed
+                mat = _fitz.Matrix(200 / 72, 200 / 72)  # 200 DPI
+                pix = page.get_pixmap(matrix=mat)
+                content = pix.tobytes("png")
+            finally:
+                doc.close()  # always close even if pixmap fails
+
+            image = _gcv.Image(content=content)
+            response = self._gcv_client.document_text_detection(image=image)
+            if response.error.message:
+                logging.warning(f"GCV error on page {page_num}: {response.error.message}")
+                return ""
+            return response.full_text_annotation.text or ""
+        except Exception as e:
+            logging.warning(f"OCR failed on page {page_num}: {e}")
+            return ""
 
     def parse_pdf(self) -> None:
         """
@@ -55,11 +120,21 @@ class CIMParser:
                 
                 # 1. Text Extraction
                 try:
-                    text = page.extract_text()
-                    if text and text.strip():
+                    text = page.extract_text() or ""
+                    text = text.strip()
+
+                    # If page has very little text and GCV is enabled, run OCR
+                    if len(text) < self._OCR_TEXT_THRESHOLD and self._gcv_client:
+                        logging.info(f"Page {page_num}: low text ({len(text)} chars) — running OCR...")
+                        ocr_text = self._ocr_page(page_num)
+                        if ocr_text.strip():
+                            logging.info(f"Page {page_num}: OCR recovered {len(ocr_text)} chars.")
+                            text = ocr_text.strip()
+
+                    if text:
                         self.extracted_text.append({
                             "page": page_num,
-                            "text": text.strip()
+                            "text": text
                         })
                 except Exception as e:
                     logging.warning(f"Failed to extract text on page {page_num}: {e}")
@@ -177,6 +252,8 @@ class CIMParser:
 
         # Sort by page number to maintain reading order
         relevant_content.sort(key=lambda x: x["page"])
+        if not relevant_content:
+            logging.warning("No relevant financial sections found. The PDF may be image-only or use unsupported formatting. LLM will receive no context — all fields will likely be null.")
         logging.info(f"Identified {len(relevant_content)} relevant standalone sections (text/tables).")
         return relevant_content
 
@@ -296,11 +373,26 @@ class LLMExtractor:
         e.g. {"2023_A": null, "2024_A": null} → null
         Leaves Market_Intelligence, Investment_Recommendation, Company_Summary untouched.
         """
-        SKIP_KEYS = {"Market_Intelligence", "Investment_Recommendation", "Company_Summary"}
+        SKIP_KEYS = {"Investment_Recommendation", "Company_Summary", "Revenue_By_Segment", "Customer_Concentration", "Revenue_By_Geography", "Management_Team", "Growth_Initiatives"}
         year_pat = re.compile(r'^\d{4}_(A|E)$|^TTM_\d{4}$|^TTM$')
         normalized = {}
         for key, value in result.items():
-            if key in SKIP_KEYS or not isinstance(value, dict):
+            # Market_Intelligence: collapse to null if all six sub-fields are null
+            if key == "Market_Intelligence":
+                if isinstance(value, dict) and all(
+                    value.get(k) is None for k in ("market_size", "market_growth_rate", "market_position", "competitors", "industry_tailwinds", "barriers_to_entry")
+                ):
+                    normalized[key] = None
+                else:
+                    normalized[key] = value
+            # Company_KPIs: collapse to null if all sub-fields are null
+            elif key == "Company_KPIs":
+                kpi_keys = ("founded_year", "total_employees", "num_locations", "countries_of_operation", "capacity_utilization")
+                if isinstance(value, dict) and all(value.get(k) is None for k in kpi_keys):
+                    normalized[key] = None
+                else:
+                    normalized[key] = value
+            elif key in SKIP_KEYS or not isinstance(value, dict):
                 normalized[key] = value
             else:
                 year_vals = {k: v for k, v in value.items() if year_pat.match(k)}
@@ -624,60 +716,51 @@ class LLMExtractor:
             "     - Normalise to $000s. If CAD, output as-is without USD conversion.\n"
             "     - If Inventory is not found in any balance sheet or NWC table → output null.\n"
             "19. MARKET INTELLIGENCE EXTRACTION LOGIC:\n"
-            "   Extract competitive landscape and market sizing data from the CIM.\n"
-            "   OUTPUT: a structured object with three sub-fields (each can independently be null):\n"
-            "     { \"competitors\": [...] or null, \"market_size\": string or null, \"market_growth_rate\": string or null }\n\n"
+            "   Extract competitive landscape and market intelligence data from the CIM.\n"
+            "   OUTPUT: structured object with these 6 sub-fields (each independently null if not found):\n"
+            "   {\n"
+            "     \"market_size\": string or null,\n"
+            "     \"market_growth_rate\": string or null,\n"
+            "     \"market_position\": string or null,\n"
+            "     \"competitors\": array of strings or null,\n"
+            "     \"industry_tailwinds\": array of strings or null,\n"
+            "     \"barriers_to_entry\": array of strings or null\n"
+            "   }\n\n"
             "   SUB-FIELD RULES:\n\n"
-            "   A) competitors — array of competitor company names:\n"
-            "     SOURCE: competitive landscape, competition, market overview sections (narrative text OR comparison tables).\n"
-            "     Extract only company/brand names explicitly named as competitors in the document.\n"
-            "     EDGE CASES:\n"
-            "       - Document names 3–10 competitors → list all named companies as strings.\n"
-            "       - Document says 'fragmented market with no dominant competitor' → output null (no names given).\n"
-            "       - Document lists competitors only in a comparison table → still extract the names.\n"
-            "       - Company itself appears in a competitor table → exclude it from the list.\n"
-            "       - Document mentions competitors only in passing ('competes with large public companies') → null.\n"
-            "       - Competitor described by category only ('large distributors') with no name → skip it.\n"
-            "       - No competitive section present at all → null.\n"
-            "     MAX 12 competitors. Output as array of strings, e.g. [\"Company A\", \"Company B\"].\n"
-            "     If no named competitors found → output null (not an empty array).\n\n"
-            "   B) market_size — descriptive string for the overall industry/market size:\n"
-            "     SOURCE: market overview, industry overview, investment highlights, competitive landscape sections.\n"
-            "     Accept ANY of these labels as a market size indicator (case-insensitive):\n"
-            "       - 'Total Addressable Market', 'TAM', 'Addressable Market', 'Market Size'\n"
-            "       - 'Industry Revenue', 'Industry Sales', 'Total Industry Revenue', 'Total Industry Sales'\n"
-            "       - '[Industry Name] Market', e.g. 'RV Market', 'U.S. Motorhome Market', 'North American Market'\n"
-            "       - '[Industry Name] Dealer Industry Revenue' or '[Industry Name] Industry Revenue Outlook'\n"
-            "       - 'Total Market', 'Overall Market', 'Global Market', 'North American Market'\n"
-            "       - Any figure describing the size of the industry the company operates in\n"
-            "     Extract the figure with units and year if stated (e.g. '$48.9 billion USD (2024)').\n"
-            "     EDGE CASES:\n"
-            "       - Given as a range ('$3–5 billion') → preserve as-is: '$3–5 billion'.\n"
-            "       - Given for multiple segments → extract total/combined figure if stated; if not, describe\n"
-            "         the segments (e.g. 'Segment A: $1.2B; Segment B: $0.8B').\n"
-            "       - Market size in CAD or another currency → preserve with currency symbol.\n"
-            "       - Figure cited from a third-party source ('per XYZ Research, $6B market') → extract\n"
-            "         the figure only, omit the source name.\n"
-            "       - Industry revenue given for current year AND projected years → use most recent actual/stated year.\n"
-            "       - Market size stated only as 'large' or 'growing' with no numeric figure → null.\n"
-            "       - No industry/market size figure anywhere in the document → null.\n"
-            "     Do NOT convert or reformat the number — preserve units exactly as in the document.\n\n"
-            "   C) market_growth_rate — descriptive string for market growth:\n"
-            "     SOURCE: same market/industry overview sections.\n"
-            "     Extract the stated CAGR or growth rate with time horizon if given (e.g. '~8% CAGR (2024–2028)').\n"
-            "     EDGE CASES:\n"
-            "       - Given as a range ('6–9% CAGR') → preserve as-is.\n"
-            "       - Stated as historical only ('grew 7% in 2023') → extract with year.\n"
-            "       - Only qualitative ('fast-growing', 'double-digit growth') with no number → null.\n"
-            "       - Multiple growth rates for different segments → take the overall market rate if stated;\n"
-            "         if only segment rates given, use largest or most relevant segment, note it.\n"
-            "       - No growth figure anywhere → null.\n\n"
+            "   A) market_size — overall industry/market size as stated in the document:\n"
+            "     Accept: TAM, Addressable Market, Industry Revenue, Total Market, '[Industry] Market', etc.\n"
+            "     Extract figure + units + year if stated (e.g. '$48.9 billion USD (2024)').\n"
+            "     Range → preserve as-is. Multi-segment → total if stated, else list segments.\n"
+            "     Qualitative only ('large', 'growing') → null. Not found → null.\n\n"
+            "   B) market_growth_rate — stated CAGR or growth rate:\n"
+            "     Extract rate + time horizon if given (e.g. '~8% CAGR (2024–2028)').\n"
+            "     Range → preserve as-is. Qualitative only → null. Not found → null.\n\n"
+            "   C) market_position — company's stated competitive rank or position:\n"
+            "     SOURCE: investment highlights, executive summary, competitive overview.\n"
+            "     Examples: '#1 manufacturer in North America', 'Top 4 security technology partner', 'market leader in specialty polymers'.\n"
+            "     Extract the most specific and prominent position claim. One string only.\n"
+            "     NEVER infer position — only extract if explicitly stated in the document.\n"
+            "     Null if no position claim found.\n\n"
+            "   D) competitors — named competitor companies:\n"
+            "     Extract only company/brand names explicitly named as competitors.\n"
+            "     Exclude the company itself. Max 12. Array of strings.\n"
+            "     Null if no named competitors found (not an empty array).\n\n"
+            "   E) industry_tailwinds — key demand/growth drivers for the industry:\n"
+            "     SOURCE: market overview, investment highlights, industry trends sections.\n"
+            "     Extract 2–5 distinct tailwinds explicitly stated as growth drivers (e.g. '5G densification', 'aging baby boomers driving RV demand', 'EV charging infrastructure buildout').\n"
+            "     Each tailwind: short descriptive phrase (max 10 words), as stated or closely paraphrased.\n"
+            "     Array of strings. Null if no tailwinds section present.\n\n"
+            "   F) barriers_to_entry — factors that protect the company from new competition:\n"
+            "     SOURCE: competitive advantages, investment highlights, competitive positioning sections.\n"
+            "     Extract 2–5 distinct barriers explicitly cited (e.g. 'long-term MSA contracts', 'proprietary formulations held as trade secrets', 'certification requirements', 'switching costs').\n"
+            "     Each barrier: short descriptive phrase (max 10 words).\n"
+            "     Array of strings. Null if no barriers stated.\n\n"
             "   GLOBAL HARD RULES for Market_Intelligence:\n"
-            "     - NEVER hallucinate or infer competitors, market sizes, or growth rates not in the document.\n"
-            "     - NEVER extract from financial tables (P&L, balance sheet) — narrative and overview sections only.\n"
-            "     - NEVER include financial metrics (revenue, EBITDA, margins) inside Market_Intelligence.\n"
-            "     - If the CIM has no market/competitive overview section at all → output null for the entire field.\n"
-            "     - Output the full structured object even if only one sub-field has data; set others to null.\n"
+            "     - NEVER hallucinate or infer data not in the document.\n"
+            "     - NEVER extract from financial tables — narrative and overview sections only.\n"
+            "     - NEVER include financial metrics (revenue, EBITDA, margins).\n"
+            "     - If entire market/competitive section absent → output null for the whole field.\n"
+            "     - Otherwise output the full object with null for any missing sub-field.\n"
             "20. 1X ADJUSTMENTS EXTRACTION LOGIC:\n"
             "   These are non-recurring / one-time add-backs in the EBITDA bridge table that reconcile\n"
             "   Reported EBITDA to Adjusted EBITDA. Extract the TOTAL adjustment amount per year.\n"
@@ -705,6 +788,97 @@ class LLMExtractor:
             "     - If projected years show $0 in the total row, output null for those years (not 0).\n"
             "     - NEVER extract from P&L rows labeled 'Other Expense' or 'Other Income' unless in bridge table.\n"
             "     - NEVER mix adjustment tiers (e.g. do not add Management + PF + Synergy together).\n"
+            "     - YEAR LABEL ALIGNMENT (CRITICAL): Use the SAME year key suffix (_A or _E) that the main P&L\n"
+            "       uses for that calendar year — NOT what the adjustment bridge table header shows.\n"
+            "       EXAMPLE: If the P&L labels 2023 as '2023E' (projected) but the adjustment table header\n"
+            "       says '2023A' (because those adjustments were reported) → STILL output '2023_A' ONLY if\n"
+            "       that year already appears as '_A' in Total_Revenue or Adj_EBITDA. If those fields use\n"
+            "       '2023_E', then 2023 is a projected year — skip it entirely for Onex_Adjustments (output null).\n"
+            "       RULE: A year key used in Onex_Adjustments MUST already exist as YYYY_A in at least one\n"
+            "       other field (Total_Revenue, Gross_Margin, Adj_EBITDA). If not → do not output that year.\n"
+            "22. COMPANY KPIs EXTRACTION LOGIC:\n"
+            "   Extract key operational snapshot metrics from the company overview / 'by the numbers' section.\n"
+            "   OUTPUT: structured object with exactly these sub-fields (all scalars, NOT time series):\n"
+            "     founded_year: integer — the year the company was founded/established. null if not stated.\n"
+            "     total_employees: integer — total headcount (FTEs). Use most recent figure. null if not stated.\n"
+            "     num_locations: integer — number of physical office/facility/plant locations. null if not stated.\n"
+            "     countries_of_operation: integer — number of countries the company operates in. null if not stated.\n"
+            "     capacity_utilization: string — current production/facility utilization as stated (e.g. '~60%', '35%'). null if not stated.\n"
+            "   SOURCE: company overview, executive summary, 'by the numbers' box, facilities section, or intro pages.\n"
+            "   HARD RULES:\n"
+            "     - Only extract what is explicitly stated — NEVER infer or calculate.\n"
+            "     - founded_year: use original founding year, NOT acquisition year by current owner.\n"
+            "     - total_employees: use the most recent headcount figure. If range given ('200-250'), use midpoint.\n"
+            "     - num_locations: count only distinct physical locations (offices, plants, warehouses). Not virtual/digital.\n"
+            "     - If the entire section is absent → output null for the whole Company_KPIs field.\n"
+            "     - If only some sub-fields are found, output an object with found values and null for missing ones.\n"
+            "27. GROWTH INITIATIVES EXTRACTION LOGIC:\n"
+            "   Extract the company's key strategic growth initiatives or pillars.\n"
+            "   OUTPUT: array of objects — [{\"title\": \"Short Title\", \"description\": \"1-2 sentence summary\", \"impact\": \"$ or % figure or null\"}, ...]\n"
+            "   SOURCE: growth strategy section, investment highlights, strategic initiatives pages.\n"
+            "   HARD RULES:\n"
+            "     - title: short label for the initiative (max 6 words), as stated or summarized from the document.\n"
+            "     - description: 1–2 sentence factual summary of what the initiative entails. No promotional language.\n"
+            "     - impact: ONLY if an explicit $ or % financial impact is stated for that initiative (e.g. '$2.0M EBITDA impact', '15% of sales'). Otherwise null.\n"
+            "     - Max 8 initiatives. If more, take the most prominent ones.\n"
+            "     - Do NOT include financial table data as initiatives.\n"
+            "     - NEVER invent initiatives not in the document.\n"
+            "     - Output null if no growth strategy section is present in the document.\n"
+            "26. MANAGEMENT TEAM EXTRACTION LOGIC:\n"
+            "   Extract the key management team members from the CIM.\n"
+            "   OUTPUT: array of objects — [{\"name\": \"Full Name\", \"title\": \"Job Title\", \"experience\": \"X years\" or null}, ...]\n"
+            "   SOURCE: management team section, leadership overview, executive team pages.\n"
+            "   HARD RULES:\n"
+            "     - Extract only named individuals with an explicit job title.\n"
+            "     - experience: extract ONLY if a total years of experience figure is explicitly stated for that person (e.g. '25+ years'). Otherwise null.\n"
+            "     - Max 10 people. If more, take the most senior (C-suite and VP level first).\n"
+            "     - Do NOT include board members, advisors, or investors — only operating management.\n"
+            "     - Do NOT include prior employer names or education in the output — name, title, experience only.\n"
+            "     - NEVER invent people not in the document.\n"
+            "     - Output null if no management team section is present in the document.\n"
+            "25. REVENUE BY GEOGRAPHY EXTRACTION LOGIC:\n"
+            "   Extract the company's revenue breakdown by geographic region as percentages.\n"
+            "   OUTPUT: array of objects — [{\"region\": \"Name\", \"pct\": number}, ...] sorted descending by pct.\n"
+            "   SOURCE: company overview, geographic breakdown charts/tables, revenue by region/country/state sections.\n"
+            "   HARD RULES:\n"
+            "     - Use most recent actual year data available.\n"
+            "     - Regions can be countries, states, continents, or named territories — use whatever the document uses.\n"
+            "     - Values are percentages (0–100). Must sum to ~100% (allow ±3% for rounding).\n"
+            "     - Max 10 regions. If more, group smallest as 'Other'.\n"
+            "     - Single-geography companies (operates only in one country/region, no breakdown given) → output null.\n"
+            "     - Do NOT confuse revenue by geography with revenue by end market or segment.\n"
+            "     - NEVER invent geographic data not in the document.\n"
+            "     - Output null if no geographic revenue breakdown exists in the document.\n"
+            "24. CUSTOMER CONCENTRATION EXTRACTION LOGIC:\n"
+            "   Extract the revenue concentration across customer tiers as percentages.\n"
+            "   OUTPUT: array of objects — [{\"tier\": \"Label\", \"pct\": number}, ...] sorted descending by pct.\n"
+            "   SOURCE: customer overview, customer concentration charts/tables, 'by the numbers' section.\n"
+            "   PREFERRED FORMAT — tier buckets (use if available):\n"
+            "     e.g. Top 1 Customer, Top 2-5, Top 6-10, All Others — extract the % each bucket represents.\n"
+            "   FALLBACK FORMAT — if only named customer % listed:\n"
+            "     Use customer aliases (Customer A, Customer B, etc.) or generic labels (Largest Customer, etc.).\n"
+            "   HARD RULES:\n"
+            "     - Values are percentages (0–100). Must sum to ~100% (allow ±3% for rounding).\n"
+            "     - If a total 'All Others' or 'Remaining' bucket is stated → include it as a tier.\n"
+            "     - If only top-N % is given with no 'others' breakdown → derive 'All Others' = 100 - top-N %.\n"
+            "     - Max 8 tiers. Group smallest into 'All Others' if more than 8.\n"
+            "     - Use most recent actual year data.\n"
+            "     - NEVER invent concentration data not in the document.\n"
+            "     - Output null if no customer concentration data exists anywhere in the document.\n"
+            "23. REVENUE BY SEGMENT EXTRACTION LOGIC:\n"
+            "   Extract the company's revenue breakdown by business segment as percentages.\n"
+            "   OUTPUT: array of objects — [{\"segment\": \"Name\", \"pct\": number}, ...] sorted descending by pct.\n"
+            "   Use the MOST RECENT actual year (YYYY_A) revenue split available.\n"
+            "   SOURCE: company overview, segment summary pages, revenue breakdown charts/tables.\n"
+            "   HARD RULES:\n"
+            "     - Segments must be distinct business units/divisions — NOT product categories or geographies.\n"
+            "     - Values are percentages (0–100). If document shows $ amounts, compute % of total.\n"
+            "     - Percentages must sum to ~100% (allow ±2% for rounding).\n"
+            "     - Max 8 segments. If more, group smallest ones as 'Other'.\n"
+            "     - Single-segment companies (no breakdown) → output null.\n"
+            "     - If only projected (YYYY_E) split available and no actual → use it but prefer actual.\n"
+            "     - NEVER invent segment names not in the document.\n"
+            "     - Output null if no segment revenue breakdown exists anywhere in the document.\n"
             "21. COMPANY SUMMARY EXTRACTION LOGIC:\n"
             "   A concise plain-English description of what the company does.\n"
             "   OUTPUT: a single string. Target length: 200–250 words. Must be in English.\n\n"
@@ -752,11 +926,15 @@ class LLMExtractor:
             "  STEP 2 fallback: if no change row, derive from NWC balance rows (need 2+ years; first year = null).\n"
             "  Derivation sign: WC_Change = NWC(N) - NWC(N-1), then REVERSE sign for cash flow convention.\n"
             "  Both historical and projected years. If only 1 NWC balance year exists → null.\n"
-            "  \"Onex_Adjustments\": {\"2021_A\": value, \"2022_A\": value, \"2023_A\": value, ...},\n"
+            "  \"Onex_Adjustments\": {\"2021_A\": value, \"2022_A\": value, ...},\n"
             "  NOTE for Onex_Adjustments: HISTORICAL years (YYYY_A / TTM_YYYY) ONLY — never output YYYY_E.\n"
             "  STEP 1: find explicit total row ('Total Adjustments', 'Total normalizations', 'Total Management Adjustments').\n"
             "  STEP 2 fallback: derive as Adj_EBITDA - EBITDA per year (only if both non-null).\n"
             "  Positive = net add-back. Projected $0 rows → output null, not 0. Null if no bridge table exists.\n"
+            "  YEAR LABEL ALIGNMENT: Only output a year key YYYY_A if that same year already appears as YYYY_A\n"
+            "  in Total_Revenue or Adj_EBITDA. If the main P&L labels a year as YYYY_E, that year is projected\n"
+            "  — do NOT output it here even if the adjustment bridge shows values for it. This prevents\n"
+            "  duplicate year columns (e.g. both 2023_A and 2023_E) appearing in the output.\n"
             "  \"AR\": single_number_or_null,\n"
             "  NOTE for AR: ONE single value — last 'A'-suffixed actual year only (e.g. 2024A not 2030E). NOT a time series.\n"
             "  NEVER use projected (E/B/F) columns. Table may extend to 2030E — use only the last actual column.\n"
@@ -766,20 +944,51 @@ class LLMExtractor:
             "  Zero (0) is valid for service businesses. Use Total Inventory subtotal if broken into components.\n"
             "  NEVER extract from narrative text or cash flow movements — balance sheet/NWC table only.\n"
             "  \"Market_Intelligence\": {\n"
+            "    \"market_size\": \"string with figure + units + year\" or null,\n"
+            "    \"market_growth_rate\": \"string with CAGR + horizon\" or null,\n"
+            "    \"market_position\": \"string — company's stated rank/position\" or null,\n"
             "    \"competitors\": [\"Name A\", \"Name B\", ...] or null,\n"
-            "    \"market_size\": \"descriptive string with units and year\" or null,\n"
-            "    \"market_growth_rate\": \"descriptive string with CAGR and horizon\" or null\n"
+            "    \"industry_tailwinds\": [\"tailwind 1\", \"tailwind 2\", ...] or null,\n"
+            "    \"barriers_to_entry\": [\"barrier 1\", \"barrier 2\", ...] or null\n"
             "  },\n"
-            "  NOTE for Market_Intelligence: extract from competitive landscape / market overview narrative sections.\n"
-            "  competitors = named company strings only (max 12) — null if no names given or section absent.\n"
-            "  market_size = preserve original figure + units + year (e.g. '$4.2 billion (2024)') — null if not stated.\n"
-            "  market_growth_rate = preserve CAGR/rate + horizon (e.g. '~8% CAGR 2024-2028') — null if qualitative only.\n"
-            "  If entire market/competitive section absent → set the full field to null (not an object).\n"
+            "  NOTE for Market_Intelligence: 6 sub-fields, each independently null. Source = narrative sections only.\n"
+            "  market_position = single string of explicit rank/position claim. industry_tailwinds/barriers_to_entry = short phrases max 10 words each.\n"
+            "  If entire section absent → null for whole field. Otherwise output object with nulls for missing sub-fields.\n"
             "  \"Company_Summary\": \"string of 200-250 words or null\"\n"
             "  NOTE for Company_Summary: plain English prose, 200-250 words, no financial figures, no bullet points.\n"
             "  Describe: what the company does, end markets, business model, geography, competitive position.\n"
             "  Source: business overview / executive summary / company profile section of the CIM (NOT financial tables).\n"
             "  Output null if no overview section is present.\n"
+            "  \"Revenue_By_Segment\": [{\"segment\": \"Name\", \"pct\": number}, ...] or null,\n"
+            "  NOTE for Revenue_By_Segment: array of segment % breakdown from most recent actual year.\n"
+            "  Segments = distinct business divisions only. Values sum to ~100. Null if single-segment or not found.\n"
+            "  \"Customer_Concentration\": [{\"tier\": \"Label\", \"pct\": number}, ...] or null,\n"
+            "  NOTE for Customer_Concentration: array of customer revenue concentration tiers.\n"
+            "  Preferred: bucket tiers (Top 1, Top 2-5, Top 6-10, All Others). Fallback: named customer aliases.\n"
+            "  Values sum to ~100. Derive 'All Others' if not stated. Null if no concentration data found.\n"
+            "  \"Revenue_By_Geography\": [{\"region\": \"Name\", \"pct\": number}, ...] or null,\n"
+            "  NOTE for Revenue_By_Geography: array of geographic revenue % breakdown, most recent actual year.\n"
+            "  Regions = countries, states, continents or named territories as stated in document.\n"
+            "  Values sum to ~100. Max 10 entries. Null if single-geography or no breakdown found.\n"
+            "  \"Management_Team\": [{\"name\": \"Full Name\", \"title\": \"Job Title\", \"experience\": \"X years or null\"}, ...] or null,\n"
+            "  NOTE for Management_Team: named executives with explicit titles only. Max 10, C-suite/VP first.\n"
+            "  experience = only if explicitly stated years figure for that person — otherwise null.\n"
+            "  No board members, advisors, or investors. Null if no management section present.\n"
+            "  \"Growth_Initiatives\": [{\"title\": \"Short Title\", \"description\": \"1-2 sentence summary\", \"impact\": \"$ or % or null\"}, ...] or null,\n"
+            "  NOTE for Growth_Initiatives: key strategic growth pillars from growth strategy section. Max 8.\n"
+            "  title = short label (max 6 words). description = factual 1-2 sentence summary. impact = explicit $ or % only.\n"
+            "  Null if no growth strategy section present.\n"
+            "  \"Company_KPIs\": {\n"
+            "    \"founded_year\": integer_or_null,\n"
+            "    \"total_employees\": integer_or_null,\n"
+            "    \"num_locations\": integer_or_null,\n"
+            "    \"countries_of_operation\": integer_or_null,\n"
+            "    \"capacity_utilization\": \"string_or_null\"\n"
+            "  }\n"
+            "  NOTE for Company_KPIs: all scalars from company overview / 'by the numbers' section.\n"
+            "  founded_year = original founding year (not PE acquisition year). total_employees = most recent headcount.\n"
+            "  num_locations = distinct physical locations only. capacity_utilization = stated % string (e.g. '~60%').\n"
+            "  If entire section absent → null. If only some sub-fields found → object with nulls for missing ones.\n"
             "}\n"
             "Include every period found in the document. Use null for any metric not found."
         )
@@ -803,100 +1012,148 @@ class LLMExtractor:
                     kwargs["max_tokens"] = 8192
                 else:
                     kwargs["top_p"] = 0.7
-                    kwargs["max_tokens"] = 4096
-                    
+                    kwargs["max_tokens"] = 8192
+
                 response = self.client.chat.completions.create(**kwargs)
                 output = response.choices[0].message.content
-
-                # Cleanup potential wrapper blocks if model wasn't strictly forced into json format
-                if "```json" in output:
-                    output = output.split("```json")[1].split("```")[0]
-                elif "```" in output:
-                    output = output.split("```")[1].split("```")[0]
-
+                output = _extract_json_from_text(output)
                 return self._normalize_nulls(json.loads(output.strip()))
                 
             elif self.provider == "anthropic":
                 # Anthropic implementation
                 response = self.client.messages.create(
                     model=self.model_name,
-                    max_tokens=4096,
+                    max_tokens=8192,
                     temperature=0.0,
                     system=system_prompt,
                     messages=[
                         {"role": "user", "content": f"{user_prompt}\n\nPlease output only JSON wrapped in ```json ... ``` blocks."}
                     ]
                 )
-                output_text = response.content[0].text
-                
-                # Strip markdown ticks for parsing
-                if "```json" in output_text:
-                    output_text = output_text.split("```json")[1].split("```")[0]
-                elif "```" in output_text:
-                    output_text = output_text.split("```")[1].split("```")[0]
 
+                if response.stop_reason == "max_tokens":
+                    logging.warning("Anthropic response was cut off (max_tokens). JSON may be incomplete.")
+
+                output_text = response.content[0].text
+                output_text = _extract_json_from_text(output_text)
                 return self._normalize_nulls(json.loads(output_text.strip()))
 
         except Exception as e:
-            logging.error(f"Error during LLM extraction: {e}")
+            logging.error(f"Error during LLM extraction: {type(e).__name__}: {e}")
             return None
 
     def generate_investment_recommendation(self, extracted_data: Dict, deal_value: float) -> Optional[Dict]:
         """
         Makes a second LLM call using the already-extracted data + deal value
-        to produce a structured M&A investment recommendation.
+        to produce a structured M&A investment recommendation with IRR scenarios,
+        leverage analysis, and a risk scorecard.
         """
         system_prompt = (
             "You are a senior M&A analyst at a private equity firm. "
-            "You have been given extracted financial and market data from a CIM (Confidential Information Memorandum) "
-            "and an enterprise value (deal price) the client is considering paying. "
-            "Your job is to give a clear, honest investment recommendation.\n\n"
+            "You have been given extracted financial and market data from a CIM and an enterprise value the client is considering paying. "
+            "Produce a rigorous, honest PE investment recommendation.\n\n"
             "CRITICAL RULES:\n"
-            "1. Base your recommendation on the data provided — do NOT assume or invent figures not given.\n"
-            "2. If a key metric is null/missing, reason from what IS available and explicitly flag the gap.\n"
-            "3. Never give a false sense of certainty — if data is sparse, say so and reduce confidence.\n"
-            "4. Be direct and concise — this is for a sophisticated PE client, not a retail investor.\n"
+            "1. Base your recommendation strictly on the data provided — do NOT assume or invent figures.\n"
+            "2. If a key metric is null/missing, reason from what IS available and flag the gap with its severity.\n"
+            "3. Adjust verdict for business TRAJECTORY not just entry multiple — a declining business at 9x is worse than a growing one at 11x.\n"
+            "4. Be direct — this is for a sophisticated PE client.\n"
             "5. Output ONE valid JSON object and nothing else.\n\n"
             "VERDICT OPTIONS: 'Strong Buy', 'Buy', 'Caution', 'Pass', 'Insufficient Data'\n"
             "CONFIDENCE OPTIONS: 'High', 'Medium', 'Low'\n\n"
-            "VERDICT GUIDANCE (EV/EBITDA based — adjust up/down for data quality and trends):\n"
-            "  < 6x  → lean Strong Buy (if revenue growing and margins healthy)\n"
-            "  6–9x  → Buy\n"
-            "  9–12x → Caution\n"
-            "  > 12x → Pass (unless exceptional growth justifies premium)\n"
-            "  EBITDA null AND Revenue null → Insufficient Data\n\n"
+            "VERDICT GUIDANCE:\n"
+            "  < 6x EV/EBITDA  → lean Strong Buy (if stable/growing business)\n"
+            "  6–9x            → Buy\n"
+            "  9–12x           → Caution\n"
+            "  > 12x           → Pass (unless exceptional growth justifies premium)\n"
+            "  DOWNGRADE verdict by one level if: revenue declining >15%, EBITDA collapsing, interest expense unknown at likely high leverage\n"
+            "  UPGRADE verdict by one level if: market leadership, strong multi-year growth trajectory, high FCF conversion\n"
+            "  EBITDA null AND Revenue null → 'Insufficient Data'\n\n"
             "CONFIDENCE GUIDANCE:\n"
             "  High   — EBITDA + Revenue + 3 or more supporting fields present\n"
             "  Medium — EBITDA or Revenue present + at least 1 supporting field\n"
             "  Low    — Only 1 key metric present, rest null\n\n"
-            "FREE CASH FLOW NOTE: If CAPEX is available, estimate FCF = EBITDA + CAPEX (CAPEX is negative). "
-            "High capex drain (|CAPEX| > 50% of EBITDA) is a risk factor. "
-            "Persistent negative WC_Change (growing NWC) also reduces real free cash flow.\n\n"
-            "MARKET CONTEXT: Use Market_Intelligence if present to assess tailwinds/headwinds. "
-            "Growing market (positive CAGR) = positive signal. Fragmented competitive market = pricing risk.\n\n"
+            "IRR SCENARIOS — compute 3 scenarios using this exact math:\n"
+            "  entry_ev = deal_value (given in $000s)\n"
+            "  hold_years = 5 (standard PE hold)\n"
+            "  For each scenario estimate:\n"
+            "    exit_ebitda ($000s): your best projection of EBITDA at end of hold period\n"
+            "    exit_multiple: realistic EV/EBITDA exit multiple for this business\n"
+            "  Then calculate (show your arithmetic):\n"
+            "    exit_ev = exit_ebitda × exit_multiple\n"
+            "    moic = exit_ev / entry_ev   (all-equity, unlevered)\n"
+            "    irr_pct = round((moic ** (1.0 / hold_years) - 1) * 100, 1)\n"
+            "  Scenario definitions:\n"
+            "    base:     achieves projected EBITDA, exits at sector-fair multiple\n"
+            "    upside:   beats projections by 15-25%, exits at premium multiple\n"
+            "    downside: misses targets by 20-30%, exits at discount multiple\n"
+            "  If EBITDA is entirely null → set irr_scenarios to null.\n\n"
+            "LEVERAGE ANALYSIS:\n"
+            "  Use most recent Adj_EBITDA (prefer actual year; fall back to first projected).\n"
+            "  debt_capacity_multiple: 4.0 (standard PE leverage)\n"
+            "  implied_debt ($000s): 4.0 × EBITDA\n"
+            "  implied_equity_check ($000s): entry_ev - implied_debt\n"
+            "  fcf_estimate ($000s): EBITDA + CAPEX (CAPEX is negative) — subtract WC_Change if it is negative (cash drain); else EBITDA only\n"
+            "  debt_service_note: plain-English flag — mention if interest expense unknown, if FCF barely covers debt, or if NWC is a persistent drain\n"
+            "  Set all fields to null if EBITDA is null.\n\n"
+            "RISK SCORECARD — score each dimension 1–5:\n"
+            "  1 = Very Weak, 2 = Weak, 3 = Neutral, 4 = Strong, 5 = Very Strong\n"
+            "  Dimensions (always output all 5 in this order):\n"
+            "  1. Revenue Quality — trend, concentration risk, predictability\n"
+            "  2. EBITDA Quality  — margin level, margin trend, cash conversion\n"
+            "  3. Market Position — competitive moat, leadership, barriers to entry\n"
+            "  4. Leverage Risk   — if interest expense null → score 2 (unknown risk); else assess coverage\n"
+            "  5. Execution Risk  — projection dependency, turnaround required, management depth\n"
+            "  Format: [{\"dimension\": \"Revenue Quality\", \"score\": N, \"note\": \"one-line rationale\"}, ...]\n\n"
+            "DATA GAPS — only gaps relevant to the investment decision:\n"
+            "  severity levels:\n"
+            "    critical — deal-breaker level unknowns (interest expense/debt, missing EBITDA, no revenue)\n"
+            "    moderate — important but workable gaps (WC data, depreciation, capex trend)\n"
+            "    minor    — useful but non-critical (management experience, geography breakdown)\n"
+            "  Format: [{\"field\": \"field_name\", \"severity\": \"critical|moderate|minor\", \"impact\": \"one-line why it matters\"}, ...]\n\n"
             "OUTPUT FORMAT — return exactly this JSON structure:\n"
             "{\n"
             "  \"verdict\": \"Strong Buy|Buy|Caution|Pass|Insufficient Data\",\n"
             "  \"confidence\": \"High|Medium|Low\",\n"
             "  \"ev_ebitda_multiple\": number_or_null,\n"
             "  \"ev_revenue_multiple\": number_or_null,\n"
-            "  \"key_positives\": [\"concise point\", \"concise point\", ...],\n"
-            "  \"key_risks\": [\"concise point\", \"concise point\", ...],\n"
-            "  \"data_gaps\": [\"field name\", ...],\n"
+            "  \"irr_scenarios\": {\n"
+            "    \"base\":     {\"exit_multiple\": number, \"exit_ebitda\": number, \"hold_years\": 5, \"moic\": number, \"irr_pct\": number},\n"
+            "    \"upside\":   {\"exit_multiple\": number, \"exit_ebitda\": number, \"hold_years\": 5, \"moic\": number, \"irr_pct\": number},\n"
+            "    \"downside\": {\"exit_multiple\": number, \"exit_ebitda\": number, \"hold_years\": 5, \"moic\": number, \"irr_pct\": number}\n"
+            "  } or null,\n"
+            "  \"leverage_analysis\": {\n"
+            "    \"debt_capacity_multiple\": number_or_null,\n"
+            "    \"implied_debt\": number_or_null,\n"
+            "    \"implied_equity_check\": number_or_null,\n"
+            "    \"fcf_estimate\": number_or_null,\n"
+            "    \"debt_service_note\": \"string_or_null\"\n"
+            "  },\n"
+            "  \"risk_scorecard\": [\n"
+            "    {\"dimension\": \"Revenue Quality\", \"score\": 1-5, \"note\": \"...\"},\n"
+            "    {\"dimension\": \"EBITDA Quality\",  \"score\": 1-5, \"note\": \"...\"},\n"
+            "    {\"dimension\": \"Market Position\", \"score\": 1-5, \"note\": \"...\"},\n"
+            "    {\"dimension\": \"Leverage Risk\",   \"score\": 1-5, \"note\": \"...\"},\n"
+            "    {\"dimension\": \"Execution Risk\",  \"score\": 1-5, \"note\": \"...\"}\n"
+            "  ],\n"
+            "  \"key_positives\": [\"concise evidence-based point\", ...],\n"
+            "  \"key_risks\": [\"concise evidence-based point\", ...],\n"
+            "  \"data_gaps\": [{\"field\": \"name\", \"severity\": \"critical|moderate|minor\", \"impact\": \"...\"}],\n"
             "  \"rationale\": \"2-3 sentence plain-English summary of the recommendation\"\n"
             "}\n"
-            "key_positives and key_risks: 2-4 points each, short and specific.\n"
-            "data_gaps: list only fields that were null/missing AND were relevant to the analysis.\n"
-            "ev_ebitda_multiple: round to 1 decimal. Use most recent actual EBITDA; if null use first projected.\n"
-            "ev_revenue_multiple: round to 2 decimals. Same priority.\n"
-            "If both EBITDA and Revenue are null → verdict must be 'Insufficient Data'."
+            "key_positives and key_risks: 2-4 points each, specific and evidence-based (cite numbers where available).\n"
+            "ev_ebitda_multiple: round to 1 decimal. Use most recent actual Adj_EBITDA; if null use first projected.\n"
+            "ev_revenue_multiple: round to 2 decimals. Same period priority.\n"
+            "irr_scenarios: unlevered (all-equity) return — mention in rationale if leverage would meaningfully change the picture.\n"
+            "If both EBITDA and Revenue are null → verdict must be 'Insufficient Data', irr_scenarios and leverage_analysis must be null."
         )
 
         user_prompt = (
-            f"DEAL VALUE (Enterprise Value being considered): ${deal_value:,.0f} (in USD, as entered by client)\n"
-            f"NOTE: All financial values below are in $000s (thousands).\n\n"
+            f"DEAL VALUE (Enterprise Value): ${deal_value:,.0f} thousand  (= ${deal_value/1000:,.1f}M)\n"
+            f"Use this as entry_ev = {deal_value:.0f} ($000s) for all IRR calculations.\n"
+            f"All financial values below are in $000s (thousands).\n\n"
             f"EXTRACTED FINANCIAL DATA:\n{json.dumps(extracted_data, indent=2)}\n\n"
-            "Using the data above and the deal value provided, generate the investment recommendation JSON."
+            "Generate the investment recommendation JSON. "
+            "Compute IRR scenarios arithmetically as instructed — show moic and irr_pct for all 3 scenarios."
         )
 
         logging.info(f"Generating investment recommendation (deal value: ${deal_value:,.0f})...")
@@ -914,37 +1171,33 @@ class LLMExtractor:
                     kwargs["response_format"] = {"type": "json_object"}
                 elif self.provider == "nvidia":
                     kwargs["top_p"] = 0.7
-                    kwargs["max_tokens"] = 2048
+                    kwargs["max_tokens"] = 6144
                 elif self.provider == "ollama":
-                    kwargs["max_tokens"] = 2048
+                    kwargs["max_tokens"] = 6144
 
                 response = self.client.chat.completions.create(**kwargs)
                 output = response.choices[0].message.content
-                if "```json" in output:
-                    output = output.split("```json")[1].split("```")[0]
-                elif "```" in output:
-                    output = output.split("```")[1].split("```")[0]
+                output = _extract_json_from_text(output)
                 return json.loads(output.strip())
 
             elif self.provider == "anthropic":
                 response = self.client.messages.create(
                     model=self.model_name,
-                    max_tokens=2048,
+                    max_tokens=6144,
                     temperature=0.1,
                     system=system_prompt,
                     messages=[
                         {"role": "user", "content": f"{user_prompt}\n\nOutput only JSON wrapped in ```json ... ``` blocks."}
                     ]
                 )
+                if response.stop_reason == "max_tokens":
+                    logging.warning("Anthropic recommendation response was cut off (max_tokens).")
                 output_text = response.content[0].text
-                if "```json" in output_text:
-                    output_text = output_text.split("```json")[1].split("```")[0]
-                elif "```" in output_text:
-                    output_text = output_text.split("```")[1].split("```")[0]
+                output_text = _extract_json_from_text(output_text)
                 return json.loads(output_text.strip())
 
         except Exception as e:
-            logging.error(f"Error generating investment recommendation: {e}")
+            logging.error(f"Error generating investment recommendation: {type(e).__name__}: {e}")
             return None
 
 DEFAULT_CLIENT_REQ = (
@@ -1029,22 +1282,17 @@ DEFAULT_CLIENT_REQ = (
             "   Use net value (after obsolescence reserve) if shown. Normalise to $000s.\n"
             "   NEVER extract from narrative text (e.g. 'inventory reduced from $34M') — table values only.\n"
             "   Output null if Inventory not found in any balance sheet or NWC table.\n"
-            "13) Market_Intelligence — Competitive landscape and market sizing. Follow Rule 19.\n"
-            "   OUTPUT: structured object with exactly these three sub-fields:\n"
-            "     competitors: array of named competitor company strings, or null if none explicitly named.\n"
-            "     market_size: string with figure + units + year if stated (e.g. '$48.9 billion USD (2024)'), or null.\n"
-            "       Accept any label: TAM, Addressable Market, Industry Revenue, Total Industry Sales,\n"
-            "       '[Industry] Market', '[Industry] Dealer Industry Revenue', Total Market, etc.\n"
-            "     market_growth_rate: string with CAGR/growth rate + time horizon if stated, or null.\n"
-            "   SOURCE: competitive landscape, market overview, industry overview, investment highlights\n"
-            "   sections — narrative text AND comparison tables. NOT financial P&L/balance sheet tables.\n"
-            "   CRITICAL EDGE CASES:\n"
-            "     - Only extract named competitors — 'large players' with no name → skip.\n"
-            "     - Fragmented market with no named players → competitors: null.\n"
-            "     - Market size as range → preserve as string. Multi-segment → total if stated.\n"
-            "     - Qualitative growth only ('fast-growing') → market_growth_rate: null.\n"
-            "     - If entire market/competitive section is absent → output null for the whole field.\n"
-            "     - NEVER invent data not in the document.\n"
+            "13) Market_Intelligence — Competitive landscape and market intelligence. Follow Rule 19.\n"
+            "   OUTPUT: object with 6 sub-fields, each independently null:\n"
+            "     market_size: string with figure + units + year (e.g. '$48.9B (2024)') — null if not stated.\n"
+            "     market_growth_rate: string with CAGR + horizon (e.g. '~8% CAGR 2024-2028') — null if qualitative only.\n"
+            "     market_position: single string of company's explicit rank/position claim — null if none stated.\n"
+            "     competitors: array of named competitor strings (max 12) — null if no named competitors.\n"
+            "     industry_tailwinds: array of 2-5 short phrases (max 10 words each) for demand drivers — null if absent.\n"
+            "     barriers_to_entry: array of 2-5 short phrases for competitive moat factors — null if absent.\n"
+            "   SOURCE: narrative sections only — market overview, competitive landscape, investment highlights.\n"
+            "   If entire section absent → null for whole field. Otherwise object with nulls for missing sub-fields.\n"
+            "   NEVER invent data. NEVER extract from financial tables.\n"
             "14) Onex_Adjustments — Total non-recurring / 1x adjustment amount per year. Follow Rule 20.\n"
             "   OUTPUT: flat numeric value per year (positive = net add-back). Historical years ONLY (YYYY_A / TTM_YYYY).\n"
             "   STEP 1: find an explicit total row in the EBITDA bridge table:\n"
@@ -1055,13 +1303,46 @@ DEFAULT_CLIENT_REQ = (
             "   NEVER include PF or synergy adjustment tiers — Management adjustments only.\n"
             "   Projected years (YYYY_E): do NOT output even if $0 appears — output null.\n"
             "   Output null if no EBITDA bridge table exists in the document.\n"
+            "   YEAR LABEL ALIGNMENT (CRITICAL): Only output YYYY_A keys that also exist as YYYY_A in\n"
+            "   Total_Revenue or Adj_EBITDA. If the main P&L calls a year YYYY_E, skip it here entirely.\n"
+            "   NEVER create a year key in Onex_Adjustments that does not already appear as YYYY_A in\n"
+            "   other fields — this causes duplicate columns (e.g. both 2023_A and 2023_E) in the output.\n"
             "15) Company_Summary — A concise analyst-written description of the company. Follow Rule 21.\n"
             "   Source: executive summary, business overview, company profile, or investment highlights\n"
             "   sections (typically the first 5–15 pages of the CIM).\n"
             "   Length: 200–250 words. Plain English prose — no bullet points, no financial figures.\n"
             "   Neutral tone: describe what the company does, its end markets, business model,\n"
             "   geographic presence, and competitive position.\n"
-            "   Output null if no business overview section is present in the document.\n\n"
+            "   Output null if no business overview section is present in the document.\n"
+            "16) Revenue_By_Segment — Revenue % split by business segment. Follow Rule 23.\n"
+            "   OUTPUT: array [{\"segment\": \"Name\", \"pct\": number}] sorted desc by pct, or null.\n"
+            "   Use most recent actual year split. Segments = distinct divisions only. Values sum ~100.\n"
+            "   Null if single-segment company or no breakdown found.\n"
+            "17) Customer_Concentration — Revenue % by customer tier. Follow Rule 24.\n"
+            "   OUTPUT: array [{\"tier\": \"Label\", \"pct\": number}] sorted desc by pct, or null.\n"
+            "   Prefer bucket tiers (Top 1, Top 2-5, Top 6-10, All Others). Derive 'All Others' = 100 - top-N if not stated.\n"
+            "   Null if no customer concentration data found.\n"
+            "18) Revenue_By_Geography — Revenue % by geographic region. Follow Rule 25.\n"
+            "   OUTPUT: array [{\"region\": \"Name\", \"pct\": number}] sorted desc by pct, or null.\n"
+            "   Use most recent actual year. Regions as stated (countries/states/continents). Values sum ~100.\n"
+            "   Null if single-geography company or no geographic breakdown found.\n"
+            "19) Management_Team — Key executives. Follow Rule 26.\n"
+            "   OUTPUT: array [{\"name\": \"Full Name\", \"title\": \"Job Title\", \"experience\": \"X years\" or null}], or null.\n"
+            "   Max 10 people, C-suite/VP first. experience only if explicitly stated. No board/advisors.\n"
+            "   Null if no management team section present.\n"
+            "20) Growth_Initiatives — Strategic growth pillars. Follow Rule 27.\n"
+            "   OUTPUT: array [{\"title\": \"Short Title\", \"description\": \"1-2 sentence summary\", \"impact\": \"$ or % or null\"}], or null.\n"
+            "   Max 8 initiatives. title = short label. impact = explicit stated $ or % figure only, else null.\n"
+            "   Null if no growth strategy section present.\n"
+            "   OUTPUT: array [{\"segment\": \"Name\", \"pct\": number}] sorted desc by pct, or null.\n"
+            "   Use most recent actual year split. Segments = distinct divisions only. Values sum ~100.\n"
+            "   Null if single-segment company or no breakdown found.\n"
+            "17) Company_KPIs — Operational snapshot metrics. Follow Rule 22.\n"
+            "   OUTPUT: object with: founded_year (int), total_employees (int), num_locations (int),\n"
+            "   countries_of_operation (int), capacity_utilization (string e.g. '~60%').\n"
+            "   Source: company overview, 'by the numbers' box, facilities section, intro pages.\n"
+            "   All scalars — NOT time series. founded_year = original founding, not PE acquisition year.\n"
+            "   If section absent → null. If partial → object with nulls for missing sub-fields.\n\n"
             "Output all numeric values in $000s (thousands). "
             "If currency is CAD, output as-is without USD conversion. "
             "If a metric does not exist in the document, use null."
@@ -1080,6 +1361,7 @@ def main():
     parser.add_argument("--model", type=str, default="gpt-4o", help="Model name (e.g., gpt-4o, claude-3-5-sonnet-20240620, meta/llama-3.3-70b-instruct)")
     parser.add_argument("--api-key", type=str, default=None, help="API key (overrides environment variable).")
     parser.add_argument("--deal-value", type=float, default=None, help="Enterprise value / deal price being considered (in USD). If provided, generates an investment recommendation.")
+    parser.add_argument("--gcv-key", type=str, default=None, help="Path to Google Cloud Vision service account JSON key. Enables OCR for image-heavy PDF pages.")
     args = parser.parse_args()
 
     # Authentication — --api-key flag takes priority, then environment variable
@@ -1098,7 +1380,7 @@ def main():
 
     # Execution flow
     try:
-        cim = CIMParser(args.pdf)
+        cim = CIMParser(args.pdf, gcv_key_path=args.gcv_key)
         cim.parse_pdf()
 
         relevant_sections = cim.find_financial_sections()

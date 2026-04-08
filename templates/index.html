@@ -626,7 +626,7 @@
 <script>
 /* ── Config ────────────────────────────────────────────────────────────── */
 const MODELS = {
-  nvidia:    ["meta/llama-3.3-70b-instruct","meta/llama-3.1-70b-instruct"],
+  nvidia:    ["meta/llama-3.3-70b-instruct","meta/llama-3.1-405b-instruct","meta/llama-3.1-70b-instruct"],
   anthropic: ["claude-haiku-4-5-20251001","claude-sonnet-4-6","claude-opus-4-6"],
   ollama:    ["gemma4:31b","gemma4:12b","llama3.3:70b"],
   openai:    ["gpt-4o","gpt-4o-mini"],
@@ -772,12 +772,14 @@ async function pollStatus() {
     log.scrollTop = log.scrollHeight;
 
     const s = data.status;
-    if (s==="parsing")    { setStep("parsing","active"); setSubtitle("Parsing PDF pages..."); }
-    if (s==="filtering")  { setStep("parsing","done"); setStep("filtering","active"); setSubtitle("Filtering financial sections..."); }
-    if (s==="extracting") { setStep("parsing","done"); setStep("filtering","done"); setStep("extracting","active"); setSubtitle("LLM extraction in progress..."); }
+    if (s==="queued")        { setSubtitle("Job queued, starting..."); }
+    if (s==="parsing")       { setStep("parsing","active"); setSubtitle("Parsing PDF pages..."); }
+    if (s==="filtering")     { setStep("parsing","done"); setStep("filtering","active"); setSubtitle("Filtering financial sections..."); }
+    if (s==="extracting")    { setStep("parsing","done"); setStep("filtering","done"); setStep("extracting","active"); setSubtitle("LLM extraction in progress..."); }
+    if (s==="recommending")  { setStep("parsing","done"); setStep("filtering","done"); setStep("extracting","done"); setSubtitle("Generating investment recommendation..."); }
     if (s==="done") {
       clearInterval(pollTimer);
-      ["parsing","filtering","extracting","done"].forEach(id => setStep(id,"done"));
+      ["parsing","filtering","extracting","recommending","done"].forEach(id => setStep(id,"done"));
       setSubtitle("Extraction complete");
       document.getElementById("headerStatus").textContent = "Complete";
       setTimeout(() => {

@@ -2,3 +2,13 @@
 extracted_results/
 __pycache__/
 *.pyc
+
+# GCP service account keys — never commit credentials
+*.json
+
+# PDF test files — client confidential, do not commit
+*.pdf
+
+# Scratch / notes files
+*.txt
+test_api_key_temp.py

@@ -351,24 +351,153 @@
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--rule-light); border-radius: 2px; }
 
-    /* ── Market Intelligence card ── */
-    .intel-card {
-      background: var(--ink-soft);
-      border: 1px solid var(--rule);
-      border-radius: 3px; overflow: hidden;
+    /* ── Company KPI stat cards ── */
+    .kpi-cards {
+      display: flex; flex-wrap: wrap; gap: 12px;
+      padding: 20px 24px;
     }
-    .intel-row {
-      display: flex; align-items: flex-start; gap: 24px;
-      padding: 14px 20px; border-bottom: 1px solid var(--rule);
+    .kpi-card {
+      background: var(--ink-mid); border: 1px solid var(--rule);
+      border-radius: 3px; padding: 16px 20px; min-width: 130px; flex: 1;
     }
-    .intel-row:last-child { border-bottom: none; }
-    .intel-label {
-      min-width: 170px; font-size: 0.78rem; font-weight: 700;
-      letter-spacing: 0.1em; text-transform: uppercase;
-      color: var(--silver-faint); padding-top: 3px; flex-shrink: 0;
+    .kpi-card-label {
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--silver-faint); margin-bottom: 8px;
     }
-    .intel-val { font-size: 0.92rem; color: var(--white); flex: 1; line-height: 1.5; }
-    .intel-val.null { color: var(--silver-faint); font-style: italic; font-size: 0.82rem; }
+    .kpi-card-value {
+      font-family: var(--mono); font-size: 1.35rem; font-weight: 700; color: var(--white);
+    }
+    .kpi-card-value.small { font-size: 1.05rem; }
+
+    /* ── Donut chart (Revenue by Segment) ── */
+    .donut-wrap {
+      display: flex; align-items: center; gap: 32px;
+      padding: 20px 24px; flex-wrap: wrap;
+    }
+    .donut-svg { flex-shrink: 0; }
+    .donut-legend { display: flex; flex-direction: column; gap: 10px; }
+    .donut-legend-item { display: flex; align-items: center; gap: 10px; }
+    .donut-legend-dot {
+      width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+    }
+    .donut-legend-label { font-size: 0.84rem; color: var(--silver); }
+    .donut-legend-pct {
+      font-family: var(--mono); font-size: 0.82rem; font-weight: 700;
+      color: var(--white); margin-left: auto; padding-left: 16px;
+    }
+
+    /* ── Horizontal bar chart (Revenue by Geography) ── */
+    .hbar-wrap { padding: 20px 24px; display: flex; flex-direction: column; gap: 10px; }
+    .hbar-row { display: flex; align-items: center; gap: 12px; }
+    .hbar-label {
+      font-size: 0.82rem; color: var(--silver); min-width: 130px;
+      max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0;
+    }
+    .hbar-track {
+      flex: 1; height: 8px; background: var(--ink-mid);
+      border-radius: 4px; overflow: hidden;
+    }
+    .hbar-fill { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+    .hbar-pct {
+      font-family: var(--mono); font-size: 0.78rem; font-weight: 700;
+      color: var(--white); min-width: 40px; text-align: right;
+    }
+
+    /* ── Management Team cards ── */
+    .mgmt-grid {
+      display: flex; flex-wrap: wrap; gap: 12px; padding: 20px 24px;
+    }
+    .mgmt-card {
+      background: var(--ink-mid); border: 1px solid var(--rule);
+      border-radius: 3px; padding: 14px 16px; min-width: 160px; flex: 1; max-width: 240px;
+    }
+    .mgmt-avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: var(--rule-light); display: flex; align-items: center; justify-content: center;
+      font-size: 0.85rem; font-weight: 700; color: var(--white);
+      margin-bottom: 10px; flex-shrink: 0;
+    }
+    .mgmt-name {
+      font-size: 0.88rem; font-weight: 700; color: var(--white);
+      margin-bottom: 4px; line-height: 1.3;
+    }
+    .mgmt-title {
+      font-size: 0.75rem; color: var(--silver-faint);
+      line-height: 1.4; margin-bottom: 6px;
+    }
+    .mgmt-exp {
+      font-family: var(--mono); font-size: 0.7rem; font-weight: 600;
+      color: var(--gold); letter-spacing: 0.04em;
+    }
+
+    /* ── Growth Initiatives list ── */
+    .growth-list { display: flex; flex-direction: column; }
+    .growth-item {
+      display: flex; align-items: flex-start; gap: 16px;
+      padding: 16px 24px; border-bottom: 1px solid var(--rule);
+    }
+    .growth-item:last-child { border-bottom: none; }
+    .growth-num {
+      font-family: var(--mono); font-size: 0.78rem; font-weight: 700;
+      color: var(--gold); min-width: 24px; padding-top: 2px; flex-shrink: 0;
+    }
+    .growth-content { flex: 1; }
+    .growth-title {
+      font-size: 0.88rem; font-weight: 700; color: var(--white);
+      margin-bottom: 4px;
+    }
+    .growth-desc {
+      font-size: 0.82rem; color: var(--silver); line-height: 1.55;
+    }
+    .growth-impact {
+      font-family: var(--mono); font-size: 0.75rem; font-weight: 700;
+      color: var(--success); background: var(--success-soft);
+      border: 1px solid rgba(61,184,122,0.2);
+      border-radius: 2px; padding: 2px 8px; white-space: nowrap;
+      align-self: flex-start; margin-top: 6px; display: inline-block;
+    }
+
+    /* ── Market Intelligence (rebuilt) ── */
+    .mi-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 0;
+    }
+    .mi-cell {
+      padding: 16px 20px; border-bottom: 1px solid var(--rule);
+      border-right: 1px solid var(--rule);
+    }
+    .mi-cell:nth-child(2n) { border-right: none; }
+    .mi-cell.full-width { grid-column: 1 / -1; border-right: none; }
+    .mi-cell:last-child, .mi-cell:nth-last-child(2):not(.full-width) { border-bottom: none; }
+    .mi-cell-label {
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--silver-faint); margin-bottom: 8px;
+    }
+    .mi-stat {
+      font-family: var(--mono); font-size: 1.05rem; font-weight: 700; color: var(--white);
+      line-height: 1.4;
+    }
+    .mi-position-badge {
+      display: inline-block; font-size: 0.82rem; font-weight: 600;
+      color: var(--gold); background: var(--gold-glow);
+      border: 1px solid rgba(201,168,76,0.25);
+      border-radius: 2px; padding: 4px 10px; line-height: 1.4;
+    }
+    .mi-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .mi-chip {
+      font-family: var(--mono); font-size: 0.75rem; font-weight: 500;
+      background: var(--ink-mid); border: 1px solid var(--rule-light);
+      color: var(--silver-dim); border-radius: 2px; padding: 3px 10px;
+    }
+    .mi-list { display: flex; flex-direction: column; gap: 6px; }
+    .mi-list-item {
+      display: flex; align-items: flex-start; gap: 8px;
+      font-size: 0.83rem; color: var(--silver); line-height: 1.45;
+    }
+    .mi-list-item::before {
+      content: '›'; color: var(--gold); font-size: 1rem;
+      line-height: 1.3; flex-shrink: 0;
+    }
+    .mi-list-item.barrier::before { color: var(--success); }
     .competitor-chips { display: flex; flex-wrap: wrap; gap: 6px; }
     .competitor-chip {
       font-family: var(--mono); font-size: 0.78rem; font-weight: 500;
@@ -382,6 +511,8 @@
       border: 1px solid var(--rule);
       border-radius: 3px; overflow: hidden;
     }
+
+    /* Header: verdict + confidence + score */
     .rec-header {
       display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
       padding: 20px 24px; background: var(--ink-mid);
@@ -393,7 +524,7 @@
     .verdict-caution     { color: var(--gold); }
     .verdict-pass        { color: var(--danger); }
     .verdict-insufficient{ color: var(--silver-faint); }
-    .rec-badges { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+    .rec-badges { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-wrap: wrap; }
     .rec-badge {
       font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em;
       text-transform: uppercase; padding: 4px 12px; border-radius: 2px;
@@ -401,19 +532,143 @@
     .badge-conf-high   { background: var(--success-soft); color: var(--success); border: 1px solid rgba(61,184,122,0.25); }
     .badge-conf-medium { background: var(--gold-glow); color: var(--gold); border: 1px solid rgba(201,168,76,0.25); }
     .badge-conf-low    { background: var(--danger-soft); color: var(--danger); border: 1px solid rgba(224,90,90,0.25); }
-    .rec-multiples {
-      display: flex; gap: 32px; padding: 16px 24px;
-      border-bottom: 1px solid var(--rule); background: var(--ink);
+    .rec-overall-score {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      background: var(--ink); border: 1px solid var(--rule-light);
+      border-radius: 3px; padding: 6px 14px;
     }
-    .rec-multiple-item { display: flex; flex-direction: column; gap: 3px; }
-    .rec-multiple-label {
-      font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em;
+    .rec-overall-score-val {
+      font-family: var(--mono); font-size: 1.1rem; font-weight: 700; color: var(--white);
+    }
+    .rec-overall-score-label {
+      font-size: 0.64rem; font-weight: 700; letter-spacing: 0.1em;
       text-transform: uppercase; color: var(--silver-faint);
     }
-    .rec-multiple-val { font-family: var(--mono); font-size: 1.15rem; font-weight: 700; color: var(--white); }
-    .rec-multiple-val.null { color: var(--silver-faint); font-size: 0.85rem; font-weight: 400; font-style: italic; }
-    .rec-body { display: grid; grid-template-columns: 1fr 1fr; }
-    .rec-col { padding: 18px 24px; border-right: 1px solid var(--rule); border-top: 1px solid var(--rule); }
+
+    /* Metrics row: multiples + leverage summary */
+    .rec-metrics-row {
+      display: flex; gap: 0; border-bottom: 1px solid var(--rule);
+      background: var(--ink);
+    }
+    .rec-metric-item {
+      display: flex; flex-direction: column; gap: 3px;
+      padding: 14px 24px; border-right: 1px solid var(--rule);
+    }
+    .rec-metric-item:last-child { border-right: none; }
+    .rec-metric-label {
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--silver-faint);
+    }
+    .rec-metric-val {
+      font-family: var(--mono); font-size: 1.1rem; font-weight: 700; color: var(--white);
+    }
+    .rec-metric-val.null { color: var(--silver-faint); font-size: 0.85rem; font-weight: 400; font-style: italic; }
+    .rec-metric-val.positive { color: var(--success); }
+    .rec-metric-val.negative { color: var(--danger); }
+    .rec-metric-val.caution  { color: var(--gold); }
+
+    /* IRR scenarios table */
+    .rec-irr-section {
+      padding: 18px 24px; border-bottom: 1px solid var(--rule);
+    }
+    .rec-section-title {
+      font-size: 0.7rem; font-weight: 700; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--silver-faint); margin-bottom: 12px;
+    }
+    .rec-irr-table {
+      width: 100%; border-collapse: collapse;
+      border: 1px solid var(--rule); border-radius: 3px; overflow: hidden;
+    }
+    .rec-irr-table th {
+      padding: 9px 16px; font-size: 0.72rem; font-weight: 700;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule-light);
+      text-align: center;
+    }
+    .rec-irr-table th:first-child { text-align: left; color: var(--silver-faint); background: var(--ink-mid); }
+    .rec-irr-table th.col-down { color: var(--danger); background: rgba(224,90,90,0.06); }
+    .rec-irr-table th.col-base { color: var(--gold); background: rgba(201,168,76,0.06); }
+    .rec-irr-table th.col-up   { color: var(--success); background: rgba(61,184,122,0.06); }
+    .rec-irr-table th:last-child { border-right: none; }
+    .rec-irr-table td {
+      padding: 9px 16px; font-family: var(--mono); font-size: 0.88rem;
+      border-right: 1px solid var(--rule); border-top: 1px solid var(--rule);
+      text-align: center; color: var(--silver);
+    }
+    .rec-irr-table td:first-child {
+      text-align: left; font-family: var(--sans); font-size: 0.8rem;
+      font-weight: 600; color: var(--silver-dim); background: var(--ink-mid);
+    }
+    .rec-irr-table td:last-child { border-right: none; }
+    .rec-irr-table tr:last-child td { border-top: 1px solid var(--rule-light); }
+    .irr-val-pos { color: var(--success); font-weight: 700; }
+    .irr-val-neg { color: var(--danger); font-weight: 700; }
+    .irr-val-neu { color: var(--gold); font-weight: 700; }
+    .moic-val    { font-size: 0.8rem; color: var(--silver-dim); }
+
+    /* Leverage analysis */
+    .rec-leverage-section {
+      display: flex; gap: 0; flex-wrap: wrap;
+      padding: 14px 24px; border-bottom: 1px solid var(--rule);
+      background: rgba(10,13,20,0.4);
+    }
+    .rec-leverage-item {
+      display: flex; flex-direction: column; gap: 2px;
+      padding-right: 28px; margin-right: 28px;
+      border-right: 1px solid var(--rule);
+    }
+    .rec-leverage-item:last-child { border-right: none; padding-right: 0; margin-right: 0; }
+    .rec-leverage-label {
+      font-size: 0.65rem; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--silver-faint);
+    }
+    .rec-leverage-val {
+      font-family: var(--mono); font-size: 0.95rem; font-weight: 700; color: var(--white);
+    }
+    .rec-leverage-val.null { color: var(--silver-faint); font-style: italic; font-weight: 400; font-size: 0.8rem; }
+    .rec-leverage-note {
+      width: 100%; margin-top: 8px; padding-top: 8px;
+      border-top: 1px solid var(--rule);
+      font-size: 0.8rem; color: var(--silver-dim); font-style: italic;
+    }
+
+    /* Risk scorecard */
+    .rec-scorecard-section {
+      padding: 18px 24px; border-bottom: 1px solid var(--rule);
+    }
+    .rec-scorecard-rows { display: flex; flex-direction: column; gap: 10px; }
+    .rec-score-row {
+      display: grid; grid-template-columns: 160px 1fr auto;
+      align-items: center; gap: 14px;
+    }
+    .rec-score-dim {
+      font-size: 0.82rem; font-weight: 600; color: var(--silver-dim);
+    }
+    .rec-score-bar-wrap {
+      display: flex; align-items: center; gap: 8px; min-width: 0;
+    }
+    .rec-score-bars { display: flex; gap: 3px; }
+    .rec-score-pip {
+      width: 22px; height: 7px; border-radius: 1px;
+      background: var(--rule-light);
+    }
+    .rec-score-pip.filled-1 { background: var(--danger); }
+    .rec-score-pip.filled-2 { background: #D4824A; }
+    .rec-score-pip.filled-3 { background: var(--gold); }
+    .rec-score-pip.filled-4 { background: #7EC8A4; }
+    .rec-score-pip.filled-5 { background: var(--success); }
+    .rec-score-note {
+      font-size: 0.78rem; color: var(--silver-faint);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .rec-score-num {
+      font-family: var(--mono); font-size: 0.8rem; font-weight: 700;
+      color: var(--silver-dim); white-space: nowrap;
+    }
+
+    /* Positives / Risks */
+    .rec-body { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--rule); }
+    .rec-col { padding: 18px 24px; border-right: 1px solid var(--rule); }
     .rec-col:last-child { border-right: none; }
     .rec-col-title {
       font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em;
@@ -429,19 +684,39 @@
     .rec-list li::before { content: '·'; position: absolute; left: 0; font-size: 1.1rem; line-height: 1.3; }
     .rec-list.positive li::before { color: var(--success); }
     .rec-list.risk li::before     { color: var(--danger); }
+
+    /* Data gaps with severity */
     .rec-data-gaps {
-      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap;
       padding: 12px 24px; border-top: 1px solid var(--rule);
     }
     .rec-data-gaps-label {
       font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em;
-      text-transform: uppercase; color: var(--silver-faint); margin-right: 4px;
+      text-transform: uppercase; color: var(--silver-faint);
+      margin-right: 4px; padding-top: 2px; white-space: nowrap;
     }
     .gap-tag {
       font-family: var(--mono); font-size: 0.72rem; font-weight: 500;
-      background: var(--ink-mid); border: 1px solid var(--rule-light);
-      color: var(--silver-faint); border-radius: 2px; padding: 2px 8px;
+      border-radius: 2px; padding: 3px 9px; display: flex; align-items: center; gap: 5px;
     }
+    .gap-tag-critical {
+      background: rgba(224,90,90,0.12); border: 1px solid rgba(224,90,90,0.3);
+      color: var(--danger);
+    }
+    .gap-tag-moderate {
+      background: rgba(201,168,76,0.1); border: 1px solid rgba(201,168,76,0.25);
+      color: var(--gold);
+    }
+    .gap-tag-minor {
+      background: var(--ink-mid); border: 1px solid var(--rule-light);
+      color: var(--silver-faint);
+    }
+    .gap-severity {
+      font-size: 0.65rem; font-weight: 800; letter-spacing: 0.08em;
+      text-transform: uppercase; opacity: 0.75;
+    }
+
+    /* Rationale */
     .rec-rationale {
       padding: 16px 24px; border-top: 1px solid var(--rule);
       font-size: 0.9rem; color: var(--silver-dim); line-height: 1.75; font-style: italic;
@@ -548,6 +823,20 @@
         </button>
         <div class="json-body" id="jsonBody">
           <pre class="json-pre" id="jsonPre"></pre>
+        </div>
+      </div>
+
+      <!-- Excel Download -->
+      <div id="excelSection" style="display:none; margin-top:24px; padding-top:24px; border-top:1px solid var(--rule);">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+          <div>
+            <div style="font-size:0.78rem; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--silver-faint); margin-bottom:4px;">Export</div>
+            <div style="font-size:0.88rem; color:var(--silver);">Download pre-filled Prebid V31 template with extracted financial data</div>
+          </div>
+          <button class="btn-ghost" id="btnDownloadExcel" onclick="downloadExcel()" style="background:rgba(61,184,122,0.08); border-color:rgba(61,184,122,0.35); color:#3DB87A;">
+            <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download Excel
+          </button>
         </div>
       </div>
 
@@ -663,7 +952,34 @@ function renderResults() {
   });
 
   /* Special non-tabular sections */
-  if (rawData.Market_Intelligence !== undefined) {
+  if (rawData.Company_KPIs != null) {
+    sections.insertBefore(buildCompanyKPIsSection(rawData.Company_KPIs), sections.firstChild);
+  }
+  if (Array.isArray(rawData.Revenue_By_Segment) && rawData.Revenue_By_Segment.length > 0) {
+    const kpiSection = sections.querySelector(".section-wrap");
+    const segSection = buildSegmentDonutSection(rawData.Revenue_By_Segment);
+    if (kpiSection) kpiSection.after(segSection);
+    else sections.insertBefore(segSection, sections.firstChild);
+  }
+  if (Array.isArray(rawData.Customer_Concentration) && rawData.Customer_Concentration.length > 0) {
+    const lastTopSection = sections.querySelector(".section-wrap:last-of-type") || sections.firstChild;
+    const concSection = buildCustomerConcentrationSection(rawData.Customer_Concentration);
+    if (lastTopSection) lastTopSection.after(concSection);
+    else sections.insertBefore(concSection, sections.firstChild);
+  }
+  if (Array.isArray(rawData.Revenue_By_Geography) && rawData.Revenue_By_Geography.length > 0) {
+    const lastTopSection = sections.querySelector(".section-wrap:last-of-type") || sections.firstChild;
+    const geoSection = buildGeographySection(rawData.Revenue_By_Geography);
+    if (lastTopSection) lastTopSection.after(geoSection);
+    else sections.insertBefore(geoSection, sections.firstChild);
+  }
+  if (Array.isArray(rawData.Management_Team) && rawData.Management_Team.length > 0) {
+    sections.appendChild(buildManagementTeamSection(rawData.Management_Team));
+  }
+  if (Array.isArray(rawData.Growth_Initiatives) && rawData.Growth_Initiatives.length > 0) {
+    sections.appendChild(buildGrowthInitiativesSection(rawData.Growth_Initiatives));
+  }
+  if (rawData.Market_Intelligence != null) {
     sections.appendChild(buildMarketIntelligenceSection(rawData.Market_Intelligence));
   }
   if (rawData.Investment_Recommendation !== undefined) {
@@ -677,6 +993,9 @@ function renderResults() {
   const jsonSection = document.getElementById("jsonSection");
   jsonSection.style.display = "block";
   document.getElementById("jsonPre").innerHTML = syntaxHighlight(JSON.stringify(rawData, null, 2));
+
+  /* Excel download section */
+  document.getElementById("excelSection").style.display = "block";
 }
 
 /* ─── Sources table (single-value fields: AR, Inventory) ──────────────── */
@@ -737,6 +1056,12 @@ function getLatestYearTag(fieldKey) {
 
 /* ─── Build table ──────────────────────────────────────────────────────── */
 function buildTable(fields, years) {
+  if (years.length === 0) {
+    const msg = document.createElement("p");
+    msg.style.cssText = "color:var(--silver-faint);font-style:italic;padding:1rem 0.5rem;font-size:0.85rem;";
+    msg.textContent = "No year data extracted for this section.";
+    return msg;
+  }
   const table = document.createElement("table");
   table.className = "fin-table";
 
@@ -808,66 +1133,327 @@ function buildTable(fields, years) {
   return table;
 }
 
-/* ─── Market Intelligence section ─────────────────────────────────────── */
-function buildMarketIntelligenceSection(data) {
+/* ─── Revenue by Segment donut chart ──────────────────────────────────── */
+const DONUT_COLORS = ["#3DB87A","#C9A84C","#5B9CF6","#E05A5A","#A78BFA","#38BDF8","#FB923C","#94A3B8"];
+
+function buildSegmentDonutSection(data) {
+  if (!Array.isArray(data) || data.length === 0) return document.createDocumentFragment();
+
   const wrap = document.createElement("div");
   wrap.className = "section-wrap";
-  wrap.innerHTML = `<div class="section-label">Market Intelligence</div>`;
+
+  const hdr = document.createElement("div");
+  hdr.className = "section-header";
+  hdr.innerHTML = `<span class="section-title">Revenue by Segment</span><span class="section-rule">Most Recent Actual Year</span>`;
+  wrap.appendChild(hdr);
+
+  const body = document.createElement("div");
+  body.className = "donut-wrap";
+
+  // Build SVG donut
+  const size = 160, cx = size / 2, cy = size / 2, r = 58, inner = 34;
+  const total = data.reduce((s, d) => s + (d.pct || 0), 0) || 100;
+  let svgPaths = "";
+  let angle = -90; // start at top
+
+  data.forEach((seg, i) => {
+    const pct = (seg.pct || 0) / total;
+    const sweep = pct * 360;
+    if (sweep === 0) return;
+    const a1 = angle * Math.PI / 180;
+    const a2 = (angle + sweep) * Math.PI / 180;
+    const x1 = cx + r * Math.cos(a1), y1 = cy + r * Math.sin(a1);
+    const x2 = cx + r * Math.cos(a2), y2 = cy + r * Math.sin(a2);
+    const xi1 = cx + inner * Math.cos(a1), yi1 = cy + inner * Math.sin(a1);
+    const xi2 = cx + inner * Math.cos(a2), yi2 = cy + inner * Math.sin(a2);
+    const lg = sweep > 180 ? 1 : 0;
+    const color = DONUT_COLORS[i % DONUT_COLORS.length];
+    svgPaths += `<path d="M${xi1},${yi1} L${x1},${y1} A${r},${r} 0 ${lg},1 ${x2},${y2} L${xi2},${yi2} A${inner},${inner} 0 ${lg},0 ${xi1},${yi1} Z" fill="${color}" opacity="0.92"/>`;
+    angle += sweep;
+  });
+
+  const svg = `<svg class="donut-svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${svgPaths}</svg>`;
+
+  // Legend
+  const legendHtml = data.map((seg, i) => `
+    <div class="donut-legend-item">
+      <div class="donut-legend-dot" style="background:${DONUT_COLORS[i % DONUT_COLORS.length]}"></div>
+      <span class="donut-legend-label">${seg.segment}</span>
+      <span class="donut-legend-pct">${seg.pct != null ? seg.pct.toFixed(1) : "—"}%</span>
+    </div>`).join("");
+
+  body.innerHTML = svg + `<div class="donut-legend">${legendHtml}</div>`;
+  wrap.appendChild(body);
+  return wrap;
+}
+
+/* ─── Growth Initiatives list ──────────────────────────────────────────── */
+function buildGrowthInitiativesSection(data) {
+  if (!Array.isArray(data) || data.length === 0) return document.createDocumentFragment();
+
+  const wrap = document.createElement("div");
+  wrap.className = "section-wrap";
+
+  const hdr = document.createElement("div");
+  hdr.className = "section-header";
+  hdr.innerHTML = `<span class="section-title">Growth Initiatives</span>`;
+  wrap.appendChild(hdr);
+
+  const list = document.createElement("div");
+  list.className = "growth-list";
+
+  data.forEach((item, i) => {
+    if (!item.title && !item.description) return;
+    const row = document.createElement("div");
+    row.className = "growth-item";
+    row.innerHTML = `
+      <div class="growth-num">0${i + 1}</div>
+      <div class="growth-content">
+        <div class="growth-title">${item.title || ""}</div>
+        <div class="growth-desc">${item.description || ""}</div>
+        ${item.impact ? `<span class="growth-impact">${item.impact}</span>` : ""}
+      </div>`;
+    list.appendChild(row);
+  });
+
+  if (!list.hasChildNodes()) return document.createDocumentFragment();
+  wrap.appendChild(list);
+  return wrap;
+}
+
+/* ─── Management Team cards ────────────────────────────────────────────── */
+function buildManagementTeamSection(data) {
+  if (!Array.isArray(data) || data.length === 0) return document.createDocumentFragment();
+
+  const wrap = document.createElement("div");
+  wrap.className = "section-wrap";
+
+  const hdr = document.createElement("div");
+  hdr.className = "section-header";
+  hdr.innerHTML = `<span class="section-title">Management Team</span>`;
+  wrap.appendChild(hdr);
+
+  const grid = document.createElement("div");
+  grid.className = "mgmt-grid";
+
+  // Avatar color palette — cycles through accent colors
+  const avatarColors = ["#3DB87A","#5B9CF6","#C9A84C","#A78BFA","#E05A5A","#38BDF8","#FB923C","#94A3B8"];
+
+  data.forEach((person, i) => {
+    if (!person.name || !person.title) return;
+    // Initials from name
+    const initials = person.name.trim().split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
+    const color = avatarColors[i % avatarColors.length];
+
+    const card = document.createElement("div");
+    card.className = "mgmt-card";
+    card.innerHTML = `
+      <div class="mgmt-avatar" style="background:${color}">${initials}</div>
+      <div class="mgmt-name">${person.name}</div>
+      <div class="mgmt-title">${person.title}</div>
+      ${person.experience ? `<div class="mgmt-exp">${person.experience}</div>` : ""}
+    `;
+    grid.appendChild(card);
+  });
+
+  if (!grid.hasChildNodes()) return document.createDocumentFragment();
+  wrap.appendChild(grid);
+  return wrap;
+}
+
+/* ─── Revenue by Geography horizontal bar chart ────────────────────────── */
+function buildGeographySection(data) {
+  if (!Array.isArray(data) || data.length === 0) return document.createDocumentFragment();
+
+  const wrap = document.createElement("div");
+  wrap.className = "section-wrap";
+
+  const hdr = document.createElement("div");
+  hdr.className = "section-header";
+  hdr.innerHTML = `<span class="section-title">Revenue by Geography</span><span class="section-rule">Most Recent Actual Year</span>`;
+  wrap.appendChild(hdr);
+
+  const body = document.createElement("div");
+  body.className = "hbar-wrap";
+
+  const maxPct = Math.max(...data.map(d => d.pct || 0)) || 1;
+
+  data.forEach((item, i) => {
+    const pct = item.pct != null ? item.pct : 0;
+    const color = DONUT_COLORS[i % DONUT_COLORS.length];
+    const row = document.createElement("div");
+    row.className = "hbar-row";
+    row.innerHTML = `
+      <span class="hbar-label" title="${item.region}">${item.region}</span>
+      <div class="hbar-track">
+        <div class="hbar-fill" style="width:${(pct / maxPct * 100).toFixed(1)}%; background:${color}"></div>
+      </div>
+      <span class="hbar-pct">${pct.toFixed(1)}%</span>`;
+    body.appendChild(row);
+  });
+
+  wrap.appendChild(body);
+  return wrap;
+}
+
+/* ─── Customer Concentration donut chart ───────────────────────────────── */
+function buildCustomerConcentrationSection(data) {
+  if (!Array.isArray(data) || data.length === 0) return document.createDocumentFragment();
+
+  const wrap = document.createElement("div");
+  wrap.className = "section-wrap";
+
+  const hdr = document.createElement("div");
+  hdr.className = "section-header";
+  hdr.innerHTML = `<span class="section-title">Customer Concentration</span><span class="section-rule">Revenue % by Customer Tier</span>`;
+  wrap.appendChild(hdr);
+
+  const body = document.createElement("div");
+  body.className = "donut-wrap";
+
+  // SVG donut (reuse same geometry as segment donut)
+  const size = 160, cx = size / 2, cy = size / 2, r = 58, inner = 34;
+  const total = data.reduce((s, d) => s + (d.pct || 0), 0) || 100;
+  let svgPaths = "";
+  let angle = -90;
+
+  data.forEach((item, i) => {
+    const pct = (item.pct || 0) / total;
+    const sweep = pct * 360;
+    if (sweep === 0) return;
+    const a1 = angle * Math.PI / 180;
+    const a2 = (angle + sweep) * Math.PI / 180;
+    const x1 = cx + r * Math.cos(a1), y1 = cy + r * Math.sin(a1);
+    const x2 = cx + r * Math.cos(a2), y2 = cy + r * Math.sin(a2);
+    const xi1 = cx + inner * Math.cos(a1), yi1 = cy + inner * Math.sin(a1);
+    const xi2 = cx + inner * Math.cos(a2), yi2 = cy + inner * Math.sin(a2);
+    const lg = sweep > 180 ? 1 : 0;
+    const color = DONUT_COLORS[i % DONUT_COLORS.length];
+    svgPaths += `<path d="M${xi1},${yi1} L${x1},${y1} A${r},${r} 0 ${lg},1 ${x2},${y2} L${xi2},${yi2} A${inner},${inner} 0 ${lg},0 ${xi1},${yi1} Z" fill="${color}" opacity="0.92"/>`;
+    angle += sweep;
+  });
+
+  const svg = `<svg class="donut-svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${svgPaths}</svg>`;
+
+  const legendHtml = data.map((item, i) => `
+    <div class="donut-legend-item">
+      <div class="donut-legend-dot" style="background:${DONUT_COLORS[i % DONUT_COLORS.length]}"></div>
+      <span class="donut-legend-label">${item.tier}</span>
+      <span class="donut-legend-pct">${item.pct != null ? item.pct.toFixed(1) : "—"}%</span>
+    </div>`).join("");
+
+  body.innerHTML = svg + `<div class="donut-legend">${legendHtml}</div>`;
+  wrap.appendChild(body);
+  return wrap;
+}
+
+/* ─── Company KPI stat cards ───────────────────────────────────────────── */
+function buildCompanyKPIsSection(data) {
+  if (!data || typeof data !== "object") return document.createDocumentFragment();
+
+  const defs = [
+    { key: "founded_year",          label: "Founded",          fmt: v => v },
+    { key: "total_employees",       label: "Employees",        fmt: v => Number(v).toLocaleString() },
+    { key: "num_locations",         label: "Locations",        fmt: v => v },
+    { key: "countries_of_operation",label: "Countries",        fmt: v => v },
+    { key: "capacity_utilization",  label: "Capacity Util.",   fmt: v => v, small: true },
+  ];
+
+  // Only include cards where value is not null/undefined
+  const cards = defs.filter(d => data[d.key] != null);
+  if (cards.length === 0) return document.createDocumentFragment();
+
+  const wrap = document.createElement("div");
+  wrap.className = "section-wrap";
+
+  const hdr = document.createElement("div");
+  hdr.className = "section-header";
+  hdr.innerHTML = `<span class="section-title">Company Snapshot</span>`;
+  wrap.appendChild(hdr);
+
+  const row = document.createElement("div");
+  row.className = "kpi-cards";
+
+  cards.forEach(d => {
+    const card = document.createElement("div");
+    card.className = "kpi-card";
+    card.innerHTML = `
+      <div class="kpi-card-label">${d.label}</div>
+      <div class="kpi-card-value${d.small ? " small" : ""}">${d.fmt(data[d.key])}</div>
+    `;
+    row.appendChild(card);
+  });
+
+  wrap.appendChild(row);
+  return wrap;
+}
+
+/* ─── Market Intelligence section (rebuilt) ────────────────────────────── */
+function buildMarketIntelligenceSection(data) {
+  if (!data || typeof data !== "object") return document.createDocumentFragment();
+
+  // Check at least one sub-field has data
+  const hasAny = ["market_size","market_growth_rate","market_position","competitors","industry_tailwinds","barriers_to_entry"]
+    .some(k => data[k] != null && (!Array.isArray(data[k]) || data[k].length > 0));
+  if (!hasAny) return document.createDocumentFragment();
+
+  const wrap = document.createElement("div");
+  wrap.className = "section-wrap";
+
+  const hdr = document.createElement("div");
+  hdr.className = "section-header";
+  hdr.innerHTML = `<span class="section-title">Market Intelligence</span>`;
+  wrap.appendChild(hdr);
 
   const card = document.createElement("div");
-  card.className = "intel-card";
+  card.style.cssText = "border:1px solid var(--rule); border-radius:3px; overflow:hidden; background:var(--ink-soft);";
 
-  function makeRow(label, contentFn) {
-    const row = document.createElement("div");
-    row.className = "intel-row";
-    const lbl = document.createElement("div");
-    lbl.className = "intel-label";
-    lbl.textContent = label;
-    row.appendChild(lbl);
-    row.appendChild(contentFn());
-    return row;
+  const grid = document.createElement("div");
+  grid.className = "mi-grid";
+
+  function addCell(label, contentHtml, fullWidth = false) {
+    if (!contentHtml) return;
+    const cell = document.createElement("div");
+    cell.className = "mi-cell" + (fullWidth ? " full-width" : "");
+    cell.innerHTML = `<div class="mi-cell-label">${label}</div>${contentHtml}`;
+    grid.appendChild(cell);
   }
 
-  /* Competitors */
-  card.appendChild(makeRow("Competitors", () => {
-    const val = document.createElement("div");
-    const comps = data && Array.isArray(data.competitors) && data.competitors.length > 0 ? data.competitors : null;
-    if (comps) {
-      val.className = "intel-val";
-      const chips = document.createElement("div");
-      chips.className = "competitor-chips";
-      comps.forEach(c => {
-        const chip = document.createElement("span");
-        chip.className = "competitor-chip";
-        chip.textContent = c;
-        chips.appendChild(chip);
-      });
-      val.appendChild(chips);
-    } else {
-      val.className = "intel-val null";
-      val.textContent = "—";
-    }
-    return val;
-  }));
+  // Market Size
+  if (data.market_size) {
+    addCell("Market Size", `<div class="mi-stat">${data.market_size}</div>`);
+  }
 
-  /* Market Size */
-  card.appendChild(makeRow("Market Size", () => {
-    const val = document.createElement("div");
-    const v = data && data.market_size;
-    val.className = "intel-val" + (v ? "" : " null");
-    val.textContent = v || "—";
-    return val;
-  }));
+  // Market Growth Rate
+  if (data.market_growth_rate) {
+    addCell("Market Growth Rate", `<div class="mi-stat">${data.market_growth_rate}</div>`);
+  }
 
-  /* Growth Rate */
-  card.appendChild(makeRow("Market Growth Rate", () => {
-    const val = document.createElement("div");
-    const v = data && data.market_growth_rate;
-    val.className = "intel-val" + (v ? "" : " null");
-    val.textContent = v || "—";
-    return val;
-  }));
+  // Market Position (full width — prominent)
+  if (data.market_position) {
+    addCell("Competitive Position", `<div class="mi-position-badge">${data.market_position}</div>`, true);
+  }
 
+  // Competitors
+  if (Array.isArray(data.competitors) && data.competitors.length > 0) {
+    const chips = data.competitors.map(c => `<span class="mi-chip">${c}</span>`).join("");
+    addCell("Competitors", `<div class="mi-chips">${chips}</div>`, true);
+  }
+
+  // Industry Tailwinds
+  if (Array.isArray(data.industry_tailwinds) && data.industry_tailwinds.length > 0) {
+    const items = data.industry_tailwinds.map(t => `<div class="mi-list-item">${t}</div>`).join("");
+    addCell("Industry Tailwinds", `<div class="mi-list">${items}</div>`);
+  }
+
+  // Barriers to Entry
+  if (Array.isArray(data.barriers_to_entry) && data.barriers_to_entry.length > 0) {
+    const items = data.barriers_to_entry.map(b => `<div class="mi-list-item barrier">${b}</div>`).join("");
+    addCell("Barriers to Entry", `<div class="mi-list">${items}</div>`);
+  }
+
+  if (!grid.hasChildNodes()) return document.createDocumentFragment();
+  card.appendChild(grid);
   wrap.appendChild(card);
   return wrap;
 }
@@ -890,20 +1476,24 @@ function buildInvestmentRecommendationSection(data) {
     return wrap;
   }
 
-  /* Header: verdict + confidence badge */
+  /* ── 1. Header: verdict + confidence + overall score ── */
   const verdict = data.verdict || "—";
   const verdictClassMap = {
-    "Strong Buy": "verdict-strong-buy",
-    "Buy": "verdict-buy",
-    "Caution": "verdict-caution",
-    "Pass": "verdict-pass",
+    "Strong Buy": "verdict-strong-buy", "Buy": "verdict-buy",
+    "Caution": "verdict-caution", "Pass": "verdict-pass",
     "Insufficient Data": "verdict-insufficient"
   };
   const vClass = verdictClassMap[verdict] || "verdict-insufficient";
-
   const conf = data.confidence || "";
   const confClassMap = { "High": "badge-conf-high", "Medium": "badge-conf-medium", "Low": "badge-conf-low" };
   const cClass = confClassMap[conf] || "badge-conf-low";
+
+  // Compute average scorecard score for "Overall Score" badge
+  let avgScore = null;
+  if (Array.isArray(data.risk_scorecard) && data.risk_scorecard.length > 0) {
+    const scores = data.risk_scorecard.map(r => r.score).filter(s => typeof s === "number");
+    if (scores.length > 0) avgScore = (scores.reduce((a,b) => a+b, 0) / scores.length).toFixed(1);
+  }
 
   const header = document.createElement("div");
   header.className = "rec-header";
@@ -911,26 +1501,164 @@ function buildInvestmentRecommendationSection(data) {
     <div class="rec-verdict ${vClass}">${escHtml(verdict)}</div>
     <div class="rec-badges">
       ${conf ? `<span class="rec-badge ${cClass}">Confidence: ${escHtml(conf)}</span>` : ""}
+      ${avgScore != null ? `
+        <div class="rec-overall-score">
+          <span class="rec-overall-score-val">${avgScore} / 5</span>
+          <span class="rec-overall-score-label">Avg Risk Score</span>
+        </div>` : ""}
     </div>`;
   card.appendChild(header);
 
-  /* Multiples */
-  const evEbitda = data.ev_ebitda_multiple != null;
-  const evRev    = data.ev_revenue_multiple != null;
-  const multiples = document.createElement("div");
-  multiples.className = "rec-multiples";
-  multiples.innerHTML = `
-    <div class="rec-multiple-item">
-      <span class="rec-multiple-label">EV / EBITDA</span>
-      <span class="rec-multiple-val${evEbitda ? "" : " null"}">${evEbitda ? escHtml(String(data.ev_ebitda_multiple)) + "x" : "—"}</span>
-    </div>
-    <div class="rec-multiple-item">
-      <span class="rec-multiple-label">EV / Revenue</span>
-      <span class="rec-multiple-val${evRev ? "" : " null"}">${evRev ? escHtml(String(data.ev_revenue_multiple)) + "x" : "—"}</span>
-    </div>`;
-  card.appendChild(multiples);
+  /* ── 2. Metrics row: entry multiples + leverage highlights ── */
+  const lev = data.leverage_analysis || {};
+  const fmtK = v => (v != null ? "$" + (Math.abs(v) >= 1000000 ? (v/1000000).toFixed(1)+"B" : Math.abs(v) >= 1000 ? (v/1000).toFixed(1)+"M" : v.toLocaleString()) : null);
 
-  /* Positives + Risks grid */
+  const metricsRow = document.createElement("div");
+  metricsRow.className = "rec-metrics-row";
+
+  function metricItem(label, val, cls) {
+    const div = document.createElement("div");
+    div.className = "rec-metric-item";
+    div.innerHTML = `
+      <span class="rec-metric-label">${escHtml(label)}</span>
+      <span class="rec-metric-val${val == null ? " null" : (cls ? " "+cls : "")}">${val != null ? escHtml(String(val)) : "—"}</span>`;
+    return div;
+  }
+
+  metricsRow.appendChild(metricItem("EV / EBITDA",
+    data.ev_ebitda_multiple != null ? data.ev_ebitda_multiple + "x" : null));
+  metricsRow.appendChild(metricItem("EV / Revenue",
+    data.ev_revenue_multiple != null ? data.ev_revenue_multiple + "x" : null));
+  if (lev.implied_equity_check != null)
+    metricsRow.appendChild(metricItem("Equity Check", fmtK(lev.implied_equity_check)));
+  if (lev.fcf_estimate != null)
+    metricsRow.appendChild(metricItem("FCF Est.", fmtK(lev.fcf_estimate),
+      lev.fcf_estimate < 0 ? "negative" : lev.fcf_estimate < (lev.implied_debt || Infinity) * 0.1 ? "caution" : "positive"));
+  if (lev.implied_debt != null)
+    metricsRow.appendChild(metricItem("Implied Debt", fmtK(lev.implied_debt)));
+  card.appendChild(metricsRow);
+
+  /* ── 3. IRR scenarios table ── */
+  const irr = data.irr_scenarios;
+  if (irr && (irr.base || irr.upside || irr.downside)) {
+    const irrSection = document.createElement("div");
+    irrSection.className = "rec-irr-section";
+    irrSection.innerHTML = `<div class="rec-section-title">Return Scenarios (5-Year Unlevered IRR)</div>`;
+
+    function irrClass(pct) {
+      if (pct == null) return "";
+      if (pct >= 20) return "irr-val-pos";
+      if (pct >= 10) return "irr-val-neu";
+      return "irr-val-neg";
+    }
+    function fmtIrr(s) {
+      if (!s) return "—";
+      const irr = s.irr_pct != null ? `<span class="${irrClass(s.irr_pct)}">${s.irr_pct > 0 ? "+" : ""}${s.irr_pct}%</span>` : "—";
+      const moic = s.moic != null ? `<div class="moic-val">${s.moic.toFixed(2)}x MOIC</div>` : "";
+      return irr + moic;
+    }
+    function fmtExit(s) {
+      if (!s) return "—";
+      const e = s.exit_ebitda != null ? fmtK(s.exit_ebitda) : "—";
+      const m = s.exit_multiple != null ? ` @ ${s.exit_multiple}x` : "";
+      return escHtml(e + m);
+    }
+
+    const tbl = document.createElement("table");
+    tbl.className = "rec-irr-table";
+    tbl.innerHTML = `
+      <thead><tr>
+        <th></th>
+        <th class="col-down">▼ Downside</th>
+        <th class="col-base">● Base</th>
+        <th class="col-up">▲ Upside</th>
+      </tr></thead>
+      <tbody>
+        <tr>
+          <td>Exit EBITDA / Multiple</td>
+          <td>${fmtExit(irr.downside)}</td>
+          <td>${fmtExit(irr.base)}</td>
+          <td>${fmtExit(irr.upside)}</td>
+        </tr>
+        <tr>
+          <td>IRR / MOIC</td>
+          <td>${fmtIrr(irr.downside)}</td>
+          <td>${fmtIrr(irr.base)}</td>
+          <td>${fmtIrr(irr.upside)}</td>
+        </tr>
+      </tbody>`;
+    irrSection.appendChild(tbl);
+    card.appendChild(irrSection);
+  }
+
+  /* ── 4. Leverage analysis ── */
+  if (lev && (lev.implied_debt != null || lev.debt_service_note)) {
+    const levSection = document.createElement("div");
+    levSection.className = "rec-leverage-section";
+
+    function levItem(label, val) {
+      const d = document.createElement("div");
+      d.className = "rec-leverage-item";
+      d.innerHTML = `
+        <span class="rec-leverage-label">${escHtml(label)}</span>
+        <span class="rec-leverage-val${val == null ? " null" : ""}">${val != null ? escHtml(String(val)) : "—"}</span>`;
+      return d;
+    }
+
+    if (lev.debt_capacity_multiple != null)
+      levSection.appendChild(levItem("Leverage Capacity", lev.debt_capacity_multiple + "x EBITDA"));
+    if (lev.implied_debt != null)
+      levSection.appendChild(levItem("Implied Debt", fmtK(lev.implied_debt)));
+    if (lev.implied_equity_check != null)
+      levSection.appendChild(levItem("Equity Check", fmtK(lev.implied_equity_check)));
+    if (lev.fcf_estimate != null)
+      levSection.appendChild(levItem("FCF Estimate", fmtK(lev.fcf_estimate)));
+
+    if (lev.debt_service_note) {
+      const note = document.createElement("div");
+      note.className = "rec-leverage-note";
+      note.innerHTML = `⚠ ${escHtml(lev.debt_service_note)}`;
+      levSection.appendChild(note);
+    }
+    card.appendChild(levSection);
+  }
+
+  /* ── 5. Risk scorecard ── */
+  if (Array.isArray(data.risk_scorecard) && data.risk_scorecard.length > 0) {
+    const scSection = document.createElement("div");
+    scSection.className = "rec-scorecard-section";
+    scSection.innerHTML = `<div class="rec-section-title">Risk Scorecard</div>`;
+    const rows = document.createElement("div");
+    rows.className = "rec-scorecard-rows";
+
+    data.risk_scorecard.forEach(item => {
+      const score = typeof item.score === "number" ? Math.min(5, Math.max(1, Math.round(item.score))) : 0;
+      const row = document.createElement("div");
+      row.className = "rec-score-row";
+
+      // Score color class based on value
+      const pipColor = score <= 1 ? "filled-1" : score === 2 ? "filled-2" : score === 3 ? "filled-3" : score === 4 ? "filled-4" : "filled-5";
+
+      let pips = "";
+      for (let i = 1; i <= 5; i++) {
+        pips += `<div class="rec-score-pip${i <= score ? " " + pipColor : ""}"></div>`;
+      }
+
+      row.innerHTML = `
+        <span class="rec-score-dim">${escHtml(item.dimension || "")}</span>
+        <div class="rec-score-bar-wrap">
+          <div class="rec-score-bars">${pips}</div>
+          <span class="rec-score-note">${escHtml(item.note || "")}</span>
+        </div>
+        <span class="rec-score-num">${score}/5</span>`;
+      rows.appendChild(row);
+    });
+
+    scSection.appendChild(rows);
+    card.appendChild(scSection);
+  }
+
+  /* ── 6. Key Positives + Key Risks ── */
   const body = document.createElement("div");
   body.className = "rec-body";
 
@@ -963,22 +1691,29 @@ function buildInvestmentRecommendationSection(data) {
   body.appendChild(makeListCol("Key Risks",     "risk",     data.key_risks,     "risk"));
   card.appendChild(body);
 
-  /* Data Gaps */
+  /* ── 7. Data Gaps with severity ── */
   const gaps = data.data_gaps;
   if (gaps && gaps.length > 0) {
     const gapsRow = document.createElement("div");
     gapsRow.className = "rec-data-gaps";
     gapsRow.innerHTML = `<span class="rec-data-gaps-label">Data Gaps</span>`;
     gaps.forEach(g => {
+      // Support both old format (string) and new format ({field, severity, impact})
       const tag = document.createElement("span");
-      tag.className = "gap-tag";
-      tag.textContent = g;
+      if (typeof g === "object" && g.field) {
+        const sev = g.severity || "minor";
+        tag.className = `gap-tag gap-tag-${sev}`;
+        tag.innerHTML = `<span class="gap-severity">${escHtml(sev)}</span>${escHtml(g.field)}${g.impact ? " — " + escHtml(g.impact) : ""}`;
+      } else {
+        tag.className = "gap-tag gap-tag-minor";
+        tag.textContent = String(g);
+      }
       gapsRow.appendChild(tag);
     });
     card.appendChild(gapsRow);
   }
 
-  /* Rationale */
+  /* ── 8. Analyst Rationale ── */
   if (data.rationale) {
     const rat = document.createElement("div");
     rat.className = "rec-rationale";
@@ -1106,6 +1841,11 @@ function syntaxHighlight(json) {
 function downloadJSON() {
   if (!jobId) return;
   window.location.href = `/api/download/${jobId}`;
+}
+
+function downloadExcel() {
+  if (!jobId) return;
+  window.location.href = `/api/download-excel/${jobId}`;
 }
 </script>
 </body>
