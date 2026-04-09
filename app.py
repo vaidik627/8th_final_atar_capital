@@ -59,7 +59,8 @@ def _run_extraction(job_id, pdf_path, provider, model, api_key, deal_value=None)
 
     try:
         _set("parsing")
-        cim = CIMParser(pdf_path)
+        gcv_api_key = os.getenv("GCV_API_KEY", "").strip() or None
+        cim = CIMParser(pdf_path, gcv_api_key=gcv_api_key)
         cim.parse_pdf()
 
         _set("filtering")
@@ -71,23 +72,32 @@ def _run_extraction(job_id, pdf_path, provider, model, api_key, deal_value=None)
         if raw is None:
             raise RuntimeError("LLM returned no data. Check API key and model.")
 
-        # Generate investment recommendation if deal value provided
+        # Generate investment recommendation if deal value provided and valid
         if deal_value:
             try:
                 dv_float = float(str(deal_value).replace(',', '').replace('$', '').strip())
-                _set("recommending")
-                recommendation = extractor.generate_investment_recommendation(raw, dv_float)
-                if recommendation:
-                    ordered = {}
-                    for key in raw:
-                        if key == "Company_Summary":
+                if dv_float <= 0 or dv_float < 10000:
+                    logging.warning(f"Deal value {dv_float} out of valid range — skipping recommendation")
+                    dv_float = None
+            except Exception:
+                dv_float = None
+                logging.warning("Deal value could not be parsed — skipping recommendation")
+
+            if dv_float:
+                try:
+                    _set("recommending")
+                    recommendation = extractor.generate_investment_recommendation(raw, dv_float)
+                    if recommendation:
+                        ordered = {}
+                        for key in raw:
+                            if key == "Company_Summary":
+                                ordered["Investment_Recommendation"] = recommendation
+                            ordered[key] = raw[key]
+                        if "Investment_Recommendation" not in ordered:
                             ordered["Investment_Recommendation"] = recommendation
-                        ordered[key] = raw[key]
-                    if "Investment_Recommendation" not in ordered:
-                        ordered["Investment_Recommendation"] = recommendation
-                    raw = ordered
-            except Exception as e:
-                logging.warning(f"Investment recommendation skipped: {e}")
+                        raw = ordered
+                except Exception as e:
+                    logging.warning(f"Investment recommendation skipped: {e}")
 
         out_dir = Path("extracted_results")
         out_dir.mkdir(exist_ok=True)
@@ -136,6 +146,20 @@ def api_extract():
 
     if not pdf_file or not pdf_file.filename.lower().endswith(".pdf"):
         return jsonify({"error": "Please upload a valid PDF file."}), 400
+
+    # ── Deal value validation (optional — only validate if provided) ─────────
+    if deal_value:
+        try:
+            dv_num = float(deal_value.replace(',', '').replace('$', '').strip())
+            if dv_num <= 0:
+                return jsonify({"error": "Deal value must be a positive number."}), 400
+            if dv_num < 10000:
+                return jsonify({"error": "Deal value seems too low — enter in $000s (e.g. 75000 = $75M)."}), 400
+            if dv_num > 10_000_000:
+                return jsonify({"error": "Deal value seems too high — did you mean to enter in $000s?"}), 400
+        except ValueError:
+            return jsonify({"error": "Deal value must be a number (e.g. 75000 for a $75M deal)."}), 400
+
     if not api_key:
         api_key = os.getenv(PROVIDER_ENV.get(provider, ""), "")
     if not api_key:
@@ -469,7 +493,9 @@ def api_download_excel(job_id):
 
 @app.route("/api/env-keys")
 def api_env_keys():
-    return jsonify({p: bool(os.getenv(v, "")) for p, v in PROVIDER_ENV.items()})
+    keys = {p: bool(os.getenv(v, "")) for p, v in PROVIDER_ENV.items()}
+    keys["gcv_ocr"] = bool(os.getenv("GCV_API_KEY", "").strip())
+    return jsonify(keys)
 
 
 if __name__ == "__main__":

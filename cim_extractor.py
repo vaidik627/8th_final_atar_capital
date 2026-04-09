@@ -8,16 +8,25 @@ fields based on variable client requirements.
 import os
 import re
 import json
+import time
 import logging
+import datetime
 import pdfplumber
 import pandas as pd
 from typing import List, Dict, Any, Optional
 import argparse
 
+# PyMuPDF — local fallback for pages where pdfplumber returns near-empty text
+try:
+    import fitz as _fitz
+    _FITZ_AVAILABLE = True
+except ImportError:
+    _fitz = None
+    _FITZ_AVAILABLE = False
+
 # Google Cloud Vision (optional — only used if gcv_key_path provided)
 try:
     from google.cloud import vision as _gcv
-    import fitz as _fitz  # PyMuPDF — self-contained PDF renderer, no Poppler needed
     _GCV_AVAILABLE = True
 except ImportError:
     _GCV_AVAILABLE = False
@@ -91,6 +100,19 @@ class CIMParser:
             else:
                 self._gcv_api_key = gcv_api_key
                 logging.info("Google Cloud Vision OCR enabled (API key).")
+
+    def _extract_page_fitz(self, page_num: int) -> str:
+        """Extract text from a single page using PyMuPDF — local fallback, no cloud needed."""
+        try:
+            doc = _fitz.open(self.pdf_path)
+            try:
+                page = doc[page_num - 1]
+                return page.get_text("text").strip()
+            finally:
+                doc.close()
+        except Exception as e:
+            logging.warning(f"PyMuPDF fallback failed on page {page_num}: {e}")
+            return ""
 
     def _ocr_page_api_key(self, page_num: int) -> str:
         """Render PDF page to PNG via PyMuPDF, send to Vision REST API using simple API key."""
@@ -184,13 +206,21 @@ class CIMParser:
                     text = page.extract_text() or ""
                     text = text.strip()
 
-                    # If page has very little text and GCV is enabled, run OCR
-                    if len(text) < self._OCR_TEXT_THRESHOLD and self._gcv_client:
-                        logging.info(f"Page {page_num}: low text ({len(text)} chars) — running OCR...")
-                        ocr_text = self._ocr_page(page_num)
-                        if ocr_text.strip():
-                            logging.info(f"Page {page_num}: OCR recovered {len(ocr_text)} chars.")
-                            text = ocr_text.strip()
+                    # If page has very little text, try fallbacks before giving up
+                    if len(text) < self._OCR_TEXT_THRESHOLD:
+                        # Fallback 1 — PyMuPDF (local, no cloud, no API key needed)
+                        if _FITZ_AVAILABLE:
+                            fitz_text = self._extract_page_fitz(page_num)
+                            if len(fitz_text) > len(text):
+                                logging.info(f"Page {page_num}: PyMuPDF recovered {len(fitz_text)} chars (pdfplumber gave {len(text)}).")
+                                text = fitz_text
+                        # Fallback 2 — GCV OCR (cloud, only if explicitly enabled)
+                        if len(text) < self._OCR_TEXT_THRESHOLD and self._gcv_client:
+                            logging.info(f"Page {page_num}: still low text ({len(text)} chars) — running GCV OCR...")
+                            ocr_text = self._ocr_page(page_num)
+                            if ocr_text.strip():
+                                logging.info(f"Page {page_num}: GCV OCR recovered {len(ocr_text)} chars.")
+                                text = ocr_text.strip()
 
                     if text:
                         self.extracted_text.append({
@@ -292,6 +322,25 @@ class CIMParser:
                 "barriers to entry", "market leadership", "fragmented market",
                 "industry revenue", "industry sales", "total industry", "dealer industry",
                 "industry outlook", "industry shipments", "unit shipments",
+                # Additional year label formats used in some CIMs
+                "ltm", "ntm", "last twelve months", "next twelve months",
+                "trailing twelve", "annualized",
+                "fy20", "fy21", "fy22", "fy23", "fy24", "fy25", "fy26", "fy27",
+                "fiscal 20", "fiscal year",
+                # Revenue aliases not already covered
+                "net sales", "total sales", "gross revenue", "total net revenue",
+                "product revenue", "service revenue", "subscription revenue",
+                "recurring revenue", "arr", "mrr", "contract revenue",
+                # EBITDA / margin aliases
+                "pro forma", "proforma", "pf adj", "pf ebitda",
+                "normalized ebitda", "run-rate", "run rate",
+                "adjusted gross profit", "adjusted gross margin",
+                # Debt / leverage (for future CIMs with richer balance sheets)
+                "total debt", "net debt", "long-term debt", "senior debt",
+                "term loan", "revolver", "credit facility",
+                # Cash flow
+                "free cash flow", "fcf", "unlevered free cash flow",
+                "cash from operations", "operating cash flow",
             ]
             
         logging.info(f"Filtering content over {len(self.extracted_text)} text pages and {len(self.extracted_tables)} tables...")
@@ -402,7 +451,8 @@ class LLMExtractor:
                     projected[year] = value
                 elif year:
                     # Fallback: guess by year — ≤ current year = historical, else projected
-                    if year <= 2024:
+                    _current_year = datetime.date.today().year
+                    if year <= _current_year:
                         historical[year] = value
                     else:
                         projected[year] = value
@@ -1032,25 +1082,36 @@ class LLMExtractor:
             "     - NEVER invent segment names not in the document.\n"
             "     - Output null if no segment revenue breakdown exists anywhere in the document.\n"
             "21. COMPANY SUMMARY EXTRACTION LOGIC:\n"
-            "   A concise plain-English description of what the company does.\n"
-            "   OUTPUT: a single string. Target length: 200–250 words. Must be in English.\n\n"
+            "   A concise analyst-written memo summary — business description PLUS key financial anchors.\n"
+            "   OUTPUT: a single string. Target length: 220–270 words. Must be in English.\n\n"
             "   EXTRACTION RULES:\n"
             "     STEP 1 — Read the business overview, executive summary, company profile, or\n"
             "       investment highlights section (typically the first 5–15 pages of the CIM).\n"
-            "     STEP 2 — Write a factual, neutral summary covering:\n"
-            "       a) What the company does — its core business and products/services\n"
-            "       b) Key end markets or customer segments it serves\n"
-            "       c) Business model (how it makes money — e.g. recurring contracts, direct sales, etc.)\n"
+            "     STEP 2 — Write a factual, neutral analyst memo covering ALL of the following:\n"
+            "       a) What the company does — core business, products/services, platforms or formats\n"
+            "       b) Key end markets or customer segments served\n"
+            "       c) Business model (how it makes money — recurring contracts, direct sales, dealer network, etc.)\n"
             "       d) Geographic presence if mentioned\n"
-            "       e) Any standout competitive advantages or brief company history if stated\n"
+            "       e) Competitive advantages or moat (brand, contracts, switching costs, etc.)\n"
+            "       f) FINANCIAL ANCHORS — include ALL of the following that are available in the CIM:\n"
+            "            - Most recent actual year revenue (e.g. 'FY2025 revenue of $X')\n"
+            "            - Current or most recent EBITDA and EBITDA margin\n"
+            "            - Peak revenue year and peak revenue value if the company has grown then contracted\n"
+            "            - Gross margin % if stated\n"
+            "            - Revenue growth rate (YoY % for most recent year)\n"
+            "            - Any projected EBITDA or revenue target if explicitly stated in the CIM\n"
+            "          If a financial figure is not present in the CIM, omit it — do NOT fabricate.\n"
+            "       g) Any key operational metrics (headcount, facility size, utilization, units, etc.)\n"
+            "       h) Brief note on recent performance trend (growth, contraction, recovery) with quantification\n"
             "   HARD RULES:\n"
             "     - Write as a neutral third-party analyst — no promotional language, no exclamation marks.\n"
             "     - Do NOT quote raw CIM text verbatim — paraphrase into clean analytical prose.\n"
-            "     - Do NOT include any financial figures (revenue, EBITDA, margins, etc.) in this summary.\n"
+            "     - DO include specific financial figures where available — they make the summary useful.\n"
             "     - Do NOT reference the CIM document itself ('this document states...', 'per the CIM...').\n"
-            "     - Keep it strictly 200–250 words — do not go below 180 or above 270.\n"
+            "     - Keep it strictly 220–270 words — do not go below 200 or above 290.\n"
             "     - If no business overview or company description section is present → output null.\n"
-            "     - Output format: plain string, no bullet points, no markdown headers."
+            "     - Output format: plain string, no bullet points, no markdown headers.\n"
+            "     - Lead with the company name and core business, then end markets, then financials, then outlook."
         )
 
         user_prompt = (
@@ -1119,10 +1180,12 @@ class LLMExtractor:
             "  NOTE for Market_Intelligence: 6 sub-fields, each independently null. Source = narrative sections only.\n"
             "  market_position = single string of explicit rank/position claim. industry_tailwinds/barriers_to_entry = short phrases max 10 words each.\n"
             "  If entire section absent → null for whole field. Otherwise output object with nulls for missing sub-fields.\n"
-            "  \"Company_Summary\": \"string of 200-250 words or null\"\n"
-            "  NOTE for Company_Summary: plain English prose, 200-250 words, no financial figures, no bullet points.\n"
-            "  Describe: what the company does, end markets, business model, geography, competitive position.\n"
-            "  Source: business overview / executive summary / company profile section of the CIM (NOT financial tables).\n"
+            "  \"Company_Summary\": \"string of 220-270 words or null\"\n"
+            "  NOTE for Company_Summary: plain English analyst prose, 220-270 words, no bullet points.\n"
+            "  Must include: what company does, end markets, business model, geography, competitive position,\n"
+            "  AND key financial anchors (current revenue, EBITDA/margin, growth rate, gross margin, any peak/trough if relevant).\n"
+            "  Source: business overview / executive summary sections of the CIM for narrative;\n"
+            "  pull financial figures from P&L tables or financial summary pages.\n"
             "  Output null if no overview section is present.\n"
             "  \"Revenue_By_Segment\": [{\"segment\": \"Name\", \"pct\": number}, ...] or null,\n"
             "  NOTE for Revenue_By_Segment: array of segment % breakdown from most recent actual year.\n"
@@ -1158,54 +1221,75 @@ class LLMExtractor:
             "Include every period found in the document. Use null for any metric not found."
         )
 
+        _RETRY_DELAYS = [5, 15, 30]  # seconds between attempts
+        _RETRYABLE = ("rate limit", "timeout", "connection", "overloaded",
+                      "503", "529", "502", "too many requests", "server error")
+
         logging.info(f"Sending extraction request to {self.provider.upper()} ({self.model_name})...")
-        try:
-            if self.provider in ["openai", "nvidia", "ollama"]:
-                kwargs = {
-                    "model": self.model_name,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    "temperature": 0.2 if self.provider == "nvidia" else 0.0,
-                }
-                
-                if self.provider == "openai":
-                    kwargs["response_format"] = {"type": "json_object"}
-                elif self.provider == "ollama":
-                    kwargs["temperature"] = 0.1
-                    kwargs["max_tokens"] = 8192
+
+        for attempt in range(3):
+            try:
+                if self.provider in ["openai", "nvidia", "ollama"]:
+                    kwargs = {
+                        "model": self.model_name,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt}
+                        ],
+                        "temperature": 0.2 if self.provider == "nvidia" else 0.0,
+                    }
+
+                    if self.provider == "openai":
+                        kwargs["response_format"] = {"type": "json_object"}
+                    elif self.provider == "ollama":
+                        kwargs["temperature"] = 0.1
+                        kwargs["max_tokens"] = 8192
+                    else:
+                        kwargs["top_p"] = 0.7
+                        kwargs["max_tokens"] = 8192
+
+                    response = self.client.chat.completions.create(**kwargs)
+                    output = response.choices[0].message.content
+                    output = _extract_json_from_text(output)
+                    return self._normalize_nulls(json.loads(output.strip()))
+
+                elif self.provider == "anthropic":
+                    response = self.client.messages.create(
+                        model=self.model_name,
+                        max_tokens=8192,
+                        temperature=0.0,
+                        system=system_prompt,
+                        messages=[
+                            {"role": "user", "content": f"{user_prompt}\n\nPlease output only JSON wrapped in ```json ... ``` blocks."}
+                        ]
+                    )
+
+                    if response.stop_reason == "max_tokens":
+                        logging.warning("Anthropic response was cut off (max_tokens). JSON may be incomplete.")
+
+                    output_text = response.content[0].text
+                    output_text = _extract_json_from_text(output_text)
+                    return self._normalize_nulls(json.loads(output_text.strip()))
+
+            except json.JSONDecodeError as e:
+                logging.error(f"JSON parse error (attempt {attempt+1}/3): {e}")
+                if attempt == 2:
+                    return None
+                delay = _RETRY_DELAYS[attempt]
+                logging.warning(f"Retrying in {delay}s...")
+                time.sleep(delay)
+
+            except Exception as e:
+                err = str(e).lower()
+                if any(x in err for x in _RETRYABLE) and attempt < 2:
+                    delay = _RETRY_DELAYS[attempt]
+                    logging.warning(f"LLM transient error (attempt {attempt+1}/3): {e}. Retrying in {delay}s...")
+                    time.sleep(delay)
                 else:
-                    kwargs["top_p"] = 0.7
-                    kwargs["max_tokens"] = 8192
+                    logging.error(f"LLM extraction failed: {type(e).__name__}: {e}")
+                    return None
 
-                response = self.client.chat.completions.create(**kwargs)
-                output = response.choices[0].message.content
-                output = _extract_json_from_text(output)
-                return self._normalize_nulls(json.loads(output.strip()))
-                
-            elif self.provider == "anthropic":
-                # Anthropic implementation
-                response = self.client.messages.create(
-                    model=self.model_name,
-                    max_tokens=8192,
-                    temperature=0.0,
-                    system=system_prompt,
-                    messages=[
-                        {"role": "user", "content": f"{user_prompt}\n\nPlease output only JSON wrapped in ```json ... ``` blocks."}
-                    ]
-                )
-
-                if response.stop_reason == "max_tokens":
-                    logging.warning("Anthropic response was cut off (max_tokens). JSON may be incomplete.")
-
-                output_text = response.content[0].text
-                output_text = _extract_json_from_text(output_text)
-                return self._normalize_nulls(json.loads(output_text.strip()))
-
-        except Exception as e:
-            logging.error(f"Error during LLM extraction: {type(e).__name__}: {e}")
-            return None
+        return None
 
     def generate_investment_recommendation(self, extracted_data: Dict, deal_value: float) -> Optional[Dict]:
         """

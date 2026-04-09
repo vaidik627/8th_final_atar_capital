@@ -487,9 +487,10 @@
             <label class="field-label" for="dealValue">Deal Value <span>(optional)</span></label>
             <div class="field-input-wrap">
               <span class="field-prefix">$</span>
-              <input class="field-input has-prefix" id="dealValue" type="text" placeholder="e.g. 45M" />
+              <input class="field-input has-prefix" id="dealValue" type="text" placeholder="e.g. 75000" />
             </div>
-            <span class="field-hint">Target enterprise value</span>
+            <span class="field-hint">Enter in $000s — e.g. 75000 = $75M &nbsp;·&nbsp; Leave blank to skip recommendation</span>
+            <span id="dealValueMsg" style="display:none;font-size:0.72rem;font-weight:500;margin-top:4px;"></span>
           </div>
         </div>
 
@@ -561,8 +562,8 @@
           </div>
         </div>
         <div class="footer-item" style="text-align:right;">
-          <span class="footer-item-label">Fields</span>
-          <span class="footer-item-value">13 targets</span>
+          <span class="footer-item-label">OCR</span>
+          <span class="footer-item-value" id="footerOcr" style="font-size:0.72rem;">—</span>
         </div>
       </div>
     </div><!-- /card -->
@@ -644,6 +645,16 @@ window.addEventListener("DOMContentLoaded", async () => {
   updateKeyStatus();
   setupDragDrop();
   setupLiveFooter();
+
+  // OCR status indicator
+  const ocrEl = document.getElementById("footerOcr");
+  if (envKeys.gcv_ocr) {
+    ocrEl.textContent = "GCV Active";
+    ocrEl.style.color = "var(--success)";
+  } else {
+    ocrEl.textContent = "PyMuPDF only";
+    ocrEl.style.color = "var(--silver-faint)";
+  }
 });
 
 /* ── Models ────────────────────────────────────────────────────────────── */
@@ -717,8 +728,29 @@ function setupLiveFooter() {
     document.getElementById("footerCompany").textContent = e.target.value || "—";
   });
   document.getElementById("dealValue").addEventListener("input", e => {
-    document.getElementById("footerDealValue").textContent = e.target.value ? "$"+e.target.value : "—";
-    document.getElementById("footerDealValue").classList.toggle("active", !!e.target.value);
+    const val = e.target.value.trim();
+    document.getElementById("footerDealValue").textContent = val ? "$"+val : "—";
+    document.getElementById("footerDealValue").classList.toggle("active", !!val);
+
+    const msg = document.getElementById("dealValueMsg");
+    const inp = e.target;
+    if (!val) {
+      msg.style.display = "none";
+      inp.style.borderColor = "";
+      return;
+    }
+    const num = parseFloat(val.replace(/[$,]/g, ""));
+    let text = "", color = "";
+    if (isNaN(num))        { text = "Must be a number — e.g. 75000 for $75M";        color = "var(--danger)"; }
+    else if (num <= 0)     { text = "Deal value must be positive";                    color = "var(--danger)"; }
+    else if (num < 10000)  { text = "Too low — enter in $000s (75000 = $75M)";       color = "var(--danger)"; }
+    else if (num > 10000000){ text = "Seems too high — enter in $000s (75000 = $75M)"; color = "var(--danger)"; }
+    else                   { text = "$" + num.toLocaleString() + "K = $" + (num/1000).toFixed(1) + "M";  color = "var(--success)"; }
+
+    msg.textContent = text;
+    msg.style.color = text ? color : "";
+    msg.style.display = text ? "block" : "none";
+    inp.style.borderColor = color;
   });
 }
 
@@ -733,6 +765,23 @@ async function startExtraction() {
   const apiKey     = document.getElementById("apiKeyInput").value.trim();
   const companyName = document.getElementById("companyName").value.trim();
   const dealValue  = document.getElementById("dealValue").value.trim();
+
+  // ── Deal value validation (optional field — only validate if provided) ──
+  if (dealValue) {
+    const dvNum = parseFloat(dealValue.replace(/[$,]/g, ''));
+    if (isNaN(dvNum) || !isFinite(dvNum)) {
+      showError("Deal value must be a number — e.g. 75000 for a $75M deal."); return;
+    }
+    if (dvNum <= 0) {
+      showError("Deal value must be a positive number."); return;
+    }
+    if (dvNum < 10000) {
+      showError("Deal value seems too low — enter in $000s (e.g. 75000 = $75M deal)."); return;
+    }
+    if (dvNum > 10000000) {
+      showError("Deal value seems too high — did you enter in $000s? (e.g. 75000 = $75M)"); return;
+    }
+  }
 
   const fd = new FormData();
   fd.append("pdf",        pdfInput.files[0]);
