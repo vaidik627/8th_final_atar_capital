@@ -49,7 +49,10 @@ class _LogHandler(logging.Handler):
 def _run_extraction(job_id, pdf_path, provider, model, api_key, deal_value=None):
     handler = _LogHandler(job_id)
     handler.setFormatter(logging.Formatter("%(levelname)s — %(message)s"))
-    logging.getLogger().addHandler(handler)
+    job_logger = logging.getLogger(f"job.{job_id}")
+    job_logger.setLevel(logging.INFO)
+    job_logger.addHandler(handler)
+    job_logger.propagate = False  # prevent bleed into root logger / other jobs
 
     def _set(status, **kw):
         with jobs_lock:
@@ -111,7 +114,7 @@ def _run_extraction(job_id, pdf_path, provider, model, api_key, deal_value=None)
         logging.error(f"Extraction error: {exc}")
         _set("error", error=str(exc))
     finally:
-        logging.getLogger().removeHandler(handler)
+        job_logger.removeHandler(handler)
         try:
             os.unlink(pdf_path)
         except OSError:
@@ -166,7 +169,12 @@ def api_extract():
         return jsonify({"error": f"API key missing for provider '{provider}'."}), 400
 
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-    pdf_file.save(tmp.name)
+    try:
+        pdf_file.save(tmp.name)
+    except Exception as e:
+        tmp.close()
+        os.unlink(tmp.name)
+        return jsonify({"error": f"Failed to save uploaded file: {e}"}), 500
     tmp.close()
 
     job_id = str(uuid.uuid4())
