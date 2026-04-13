@@ -495,6 +495,10 @@ def api_download_excel(job_id):
     for col in COL_PROJ:
         ws[f"{col}32"] = None
 
+    # Clear hardcoded template values in scalar source cells (C7=8000, C8=7500)
+    ws["C7"] = None
+    ws["C8"] = None
+
     # Row 7  — Net Revenue
     _write_field("Total_Revenue", 7)
 
