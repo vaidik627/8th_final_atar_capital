@@ -974,7 +974,9 @@ function renderResults() {
       });
       scrollWrap.appendChild(buildSourcesTable(visibleFields));
     } else {
-      scrollWrap.appendChild(buildTable(grp.fields, years));
+      const tableEl = buildTable(grp.fields, years);
+      if (!tableEl) return; /* all rows null — skip entire section */
+      scrollWrap.appendChild(tableEl);
     }
     wrap.appendChild(scrollWrap);
     sections.appendChild(wrap);
@@ -1138,6 +1140,11 @@ function buildTable(fields, years) {
   fields.forEach(fieldKey => {
     const meta = FIELD_META[fieldKey] || { label: fieldKey, key: "", rule: "" };
     const data = rawData ? rawData[fieldKey] : undefined;
+
+    /* Skip row if all year values are null/undefined */
+    const allNull = !data || years.every(yr => data[yr] === null || data[yr] === undefined);
+    if (allNull) return;
+
     const tr = document.createElement("tr");
 
     /* Field name cell */
@@ -1158,19 +1165,14 @@ function buildTable(fields, years) {
         const addCls = isProjected ? " projected-col" : isTTM ? " ttm-col" : "";
         if (isProjected) td.classList.add("projected-col");
 
-        if (!data) {
+        const v = data[yr];
+        if (v === null || v === undefined) {
           td.className = `td-val null${addCls}`;
           td.textContent = "—";
         } else {
-          const v = data[yr];
-          if (v === null || v === undefined) {
-            td.className = `td-val null${addCls}`;
-            td.textContent = "—";
-          } else {
-            const isNeg = typeof v === "number" && v < 0;
-            td.className = `td-val${isNeg ? " negative" : ""}${addCls}`;
-            td.textContent = formatVal(v);
-          }
+          const isNeg = typeof v === "number" && v < 0;
+          td.className = `td-val${isNeg ? " negative" : ""}${addCls}`;
+          td.textContent = formatVal(v);
         }
         tr.appendChild(td);
       });
@@ -1178,6 +1180,9 @@ function buildTable(fields, years) {
 
     tbody.appendChild(tr);
   });
+
+  /* If no rows survived the null filter, signal caller to skip section */
+  if (tbody.childElementCount === 0) return null;
 
   table.appendChild(tbody);
   return table;
