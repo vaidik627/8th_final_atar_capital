@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign In · CIM Intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --ink:        #0A0D14;
+      --ink-soft:   #141820;
+      --ink-mid:    #1C2230;
+      --rule:       #232C3D;
+      --rule-light: #2E3A50;
+      --silver:     #D4DCE8;
+      --silver-dim: #9BAFC4;
+      --silver-faint:#607080;
+      --gold:       #C9A84C;
+      --gold-dim:   #7A6130;
+      --gold-glow:  rgba(201,168,76,0.12);
+      --white:      #F0F4FA;
+      --danger:     #E05A5A;
+      --success:    #3DB87A;
+      --sans:       'DM Sans', sans-serif;
+      --serif:      'DM Serif Display', serif;
+      --mono:       'DM Mono', monospace;
+    }
+    html { font-size: 16px; }
+    body {
+      background: var(--ink);
+      color: var(--silver);
+      font-family: var(--sans);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 50% -10%, rgba(201,168,76,0.07) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 30% at 90% 80%, rgba(59,130,246,0.04) 0%, transparent 60%);
+      pointer-events: none;
+    }
+    .login-wrap {
+      position: relative; z-index: 1;
+      width: 100%; max-width: 400px;
+      padding: 2rem;
+    }
+    /* Logo / Brand */
+    .brand {
+      display: flex; align-items: center; gap: 14px;
+      margin-bottom: 2.5rem;
+      justify-content: center;
+    }
+    .brand-logo {
+      width: 38px; height: 38px;
+      border: 1.5px solid var(--gold);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--gold-glow);
+    }
+    .brand-logo svg { width: 18px; height: 18px; stroke: var(--gold); fill: none; stroke-width: 2; }
+    .brand-text { display: flex; flex-direction: column; line-height: 1.15; }
+    .brand-title { font-family: var(--serif); font-size: 1.2rem; color: var(--white); }
+    .brand-sub { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--silver-dim); }
+    /* Card */
+    .login-card {
+      background: var(--ink-soft);
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .login-card-header {
+      padding: 1.5rem 1.75rem 1.25rem;
+      border-bottom: 1px solid var(--rule);
+      background: var(--ink-mid);
+    }
+    .login-heading {
+      font-family: var(--serif);
+      font-size: 1.4rem;
+      color: var(--white);
+      margin-bottom: 4px;
+    }
+    .login-sub { font-size: 0.82rem; color: var(--silver-dim); }
+    .login-body { padding: 1.75rem; display: flex; flex-direction: column; gap: 1.25rem; }
+    /* Field */
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field-label {
+      font-size: 0.75rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--silver-dim);
+    }
+    .field-input {
+      width: 100%;
+      background: var(--ink);
+      border: 1px solid var(--rule-light);
+      border-radius: 3px;
+      color: var(--white);
+      font-family: var(--sans);
+      font-size: 0.95rem;
+      padding: 10px 14px;
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .field-input::placeholder { color: var(--silver-faint); }
+    .field-input:focus {
+      border-color: var(--gold);
+      box-shadow: 0 0 0 3px rgba(201,168,76,0.1);
+    }
+    /* Error */
+    .error-banner {
+      background: rgba(224,90,90,0.08);
+      border: 1px solid rgba(224,90,90,0.3);
+      border-radius: 3px;
+      padding: 10px 14px;
+      font-size: 0.82rem;
+      color: #F8A0A0;
+    }
+    /* Button */
+    .btn-login {
+      width: 100%;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      background: var(--gold);
+      border: none; border-radius: 3px;
+      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 0.95rem; font-weight: 700;
+      letter-spacing: 0.04em;
+      padding: 12px 24px;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      margin-top: 0.25rem;
+    }
+    .btn-login:hover { opacity: 0.88; }
+    .btn-login svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2.5; }
+    /* Demo hint */
+    .demo-hint {
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--silver-faint);
+      padding: 1rem 1.75rem 1.25rem;
+      border-top: 1px solid var(--rule);
+    }
+    .demo-hint code {
+      font-family: var(--mono);
+      color: var(--silver-dim);
+      background: rgba(255,255,255,0.04);
+      padding: 1px 5px;
+      border-radius: 2px;
+    }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-thumb { background: var(--rule-light); border-radius: 2px; }
+  </style>
+</head>
+<body>
+<div class="login-wrap">
+  <div class="brand">
+    <div class="brand-logo">
+      <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/>
+        <polyline points="16 7 22 7 22 13"/>
+      </svg>
+    </div>
+    <div class="brand-text">
+      <span class="brand-title">CIM Intelligence</span>
+      <span class="brand-sub">Atar Capital</span>
+    </div>
+  </div>
+
+  <div class="login-card">
+    <div class="login-card-header">
+      <div class="login-heading">Sign In</div>
+      <div class="login-sub">Access the M&amp;A deal analysis platform</div>
+    </div>
+    <form class="login-body" method="POST" action="/login">
+      {% if error %}
+      <div class="error-banner">{{ error }}</div>
+      {% endif %}
+      <div class="field">
+        <label class="field-label" for="username">Username</label>
+        <input class="field-input" id="username" name="username" type="text"
+               placeholder="Enter username" autocomplete="username" required autofocus />
+      </div>
+      <div class="field">
+        <label class="field-label" for="password">Password</label>
+        <input class="field-input" id="password" name="password" type="password"
+               placeholder="Enter password" autocomplete="current-password" required />
+      </div>
+      <button class="btn-login" type="submit">
+        <svg viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+        Sign In
+      </button>
+    </form>
+    <div class="demo-hint">
+      Demo credentials &nbsp;·&nbsp; <code>admin</code> / <code>atar2024</code>
+    </div>
+  </div>
+</div>
+</body>
+</html>

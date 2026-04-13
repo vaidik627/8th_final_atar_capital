@@ -11,7 +11,8 @@ import logging
 import tempfile
 import threading
 from pathlib import Path
-from flask import Flask, render_template, request, jsonify, send_file, make_response
+from flask import Flask, render_template, request, jsonify, send_file, make_response, session, redirect, url_for
+from functools import wraps
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from cim_extractor import CIMParser, LLMExtractor, _load_env, DEFAULT_CLIENT_REQ
@@ -21,9 +22,22 @@ _load_env()
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.config["MAX_CONTENT_LENGTH"] = 200 * 1024 * 1024
 app.config["JSON_SORT_KEYS"] = False  # preserve extraction field order in API responses
+app.secret_key = os.getenv("FLASK_SECRET", "atar-cim-intel-2024-secret")
+
+# Demo credentials — replace with real auth for production
+DEMO_USERS = {"admin": "atar2024"}
 
 jobs: dict = {}
 jobs_lock = threading.Lock()
+
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("user"):
+            return redirect(url_for("login_page"))
+        return f(*args, **kwargs)
+    return decorated
 
 PROVIDER_ENV = {
     "nvidia":    "NVIDIA_API_KEY",
@@ -124,13 +138,43 @@ def _run_extraction(job_id, pdf_path, provider, model, api_key, deal_value=None)
 
 @app.route("/")
 def index():
-    resp = make_response(render_template("index.html"))
+    if session.get("user"):
+        return redirect(url_for("dashboard"))
+    return redirect(url_for("login_page"))
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login_page():
+    if session.get("user"):
+        return redirect(url_for("dashboard"))
+    error = None
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "").strip()
+        if DEMO_USERS.get(username) == password:
+            session["user"] = username
+            return redirect(url_for("dashboard"))
+        error = "Invalid username or password."
+    return render_template("login.html", error=error)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login_page"))
+
+
+@app.route("/dashboard")
+@login_required
+def dashboard():
+    resp = make_response(render_template("dashboard.html"))
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     resp.headers["Pragma"] = "no-cache"
     return resp
 
 
 @app.route("/results")
+@login_required
 def results():
     resp = make_response(render_template("results.html"))
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
@@ -513,6 +557,25 @@ def api_download_excel(job_id):
         as_attachment=True,
         download_name=download_name,
     )
+
+
+@app.route("/api/jobs")
+@login_required
+def api_jobs():
+    """Return all jobs in memory — newest first."""
+    with jobs_lock:
+        result = []
+        for jid, j in jobs.items():
+            result.append({
+                "job_id":     jid,
+                "status":     j["status"],
+                "deal_name":  j.get("deal_name", ""),
+                "filename":   j.get("filename", ""),
+                "deal_value": j.get("deal_value", ""),
+                "error":      j.get("error"),
+                "field_count": len(j["raw"]) if j.get("raw") else 0,
+            })
+    return jsonify(list(reversed(result)))
 
 
 @app.route("/api/env-keys")

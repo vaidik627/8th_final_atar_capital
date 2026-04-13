@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard · CIM Intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --ink:         #0A0D14;
+      --ink-soft:    #141820;
+      --ink-mid:     #1C2230;
+      --rule:        #232C3D;
+      --rule-light:  #2E3A50;
+      --silver:      #D4DCE8;
+      --silver-dim:  #9BAFC4;
+      --silver-faint:#607080;
+      --gold:        #C9A84C;
+      --gold-dim:    #7A6130;
+      --gold-glow:   rgba(201,168,76,0.12);
+      --gold-glow2:  rgba(201,168,76,0.06);
+      --white:       #F0F4FA;
+      --danger:      #E05A5A;
+      --success:     #3DB87A;
+      --sans:        'DM Sans', sans-serif;
+      --serif:       'DM Serif Display', serif;
+      --mono:        'DM Mono', monospace;
+      --sidebar-w:   240px;
+    }
+    html, body { height: 100%; font-size: 16px; }
+    body {
+      background: var(--ink);
+      color: var(--silver);
+      font-family: var(--sans);
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* ── Sidebar ──────────────────────────────────────────────────────────── */
+    .sidebar {
+      width: var(--sidebar-w);
+      flex-shrink: 0;
+      height: 100vh;
+      background: var(--ink-soft);
+      border-right: 1px solid var(--rule);
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      left: 0; top: 0; bottom: 0;
+      z-index: 50;
+    }
+    .sidebar-logo {
+      padding: 1.4rem 1.25rem 1.2rem;
+      border-bottom: 1px solid var(--rule);
+      display: flex; align-items: center; gap: 12px;
+    }
+    .logo-icon {
+      width: 32px; height: 32px;
+      border: 1.5px solid var(--gold);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--gold-glow2);
+      flex-shrink: 0;
+    }
+    .logo-icon svg { width: 15px; height: 15px; stroke: var(--gold); fill: none; stroke-width: 2; }
+    .logo-text { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+    .logo-title { font-family: var(--serif); font-size: 0.95rem; color: var(--white); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .logo-sub { font-size: 0.65rem; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--silver-faint); }
+
+    /* Nav */
+    .sidebar-nav {
+      flex: 1;
+      padding: 1.25rem 0.75rem;
+      display: flex; flex-direction: column; gap: 2px;
+      overflow-y: auto;
+    }
+    .nav-section-label {
+      font-size: 0.65rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--silver-faint); padding: 0 0.5rem; margin: 0.75rem 0 0.4rem;
+    }
+    .nav-section-label:first-child { margin-top: 0; }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 12px;
+      border-radius: 4px;
+      font-size: 0.875rem; font-weight: 500;
+      color: var(--silver-dim);
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      border: none; background: none; width: 100%; text-align: left;
+      text-decoration: none;
+    }
+    .nav-item svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.75; flex-shrink: 0; }
+    .nav-item:hover { background: rgba(255,255,255,0.04); color: var(--silver); }
+    .nav-item.active {
+      background: var(--gold-glow);
+      color: var(--gold);
+      border: 1px solid rgba(201,168,76,0.18);
+    }
+    .nav-item.active svg { stroke: var(--gold); }
+    .nav-badge {
+      margin-left: auto;
+      background: rgba(201,168,76,0.15);
+      color: var(--gold);
+      font-family: var(--mono);
+      font-size: 0.68rem; font-weight: 600;
+      padding: 2px 7px; border-radius: 10px;
+      min-width: 20px; text-align: center;
+    }
+
+    /* Sidebar footer */
+    .sidebar-footer {
+      padding: 1rem 0.75rem;
+      border-top: 1px solid var(--rule);
+    }
+    .user-block {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px; border-radius: 4px;
+      margin-bottom: 6px;
+    }
+    .user-avatar {
+      width: 30px; height: 30px; border-radius: 50%;
+      background: var(--gold-glow);
+      border: 1px solid rgba(201,168,76,0.3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem; font-weight: 700; color: var(--gold);
+      flex-shrink: 0;
+    }
+    .user-info { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+    .user-name { font-size: 0.82rem; font-weight: 600; color: var(--silver); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .user-role { font-size: 0.68rem; color: var(--silver-faint); }
+    .btn-logout {
+      display: flex; align-items: center; gap: 8px;
+      width: 100%; padding: 8px 12px; border-radius: 4px;
+      font-size: 0.82rem; font-weight: 500; color: var(--silver-faint);
+      border: none; background: none; cursor: pointer;
+      transition: color 0.15s, background 0.15s; text-align: left;
+      text-decoration: none;
+    }
+    .btn-logout svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .btn-logout:hover { color: var(--danger); background: rgba(224,90,90,0.06); }
+
+    /* ── Main area ────────────────────────────────────────────────────────── */
+    .main-area {
+      margin-left: var(--sidebar-w);
+      flex: 1;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Top bar */
+    .topbar {
+      height: 56px;
+      border-bottom: 1px solid var(--rule);
+      background: rgba(10,13,20,0.9);
+      backdrop-filter: blur(12px);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 2rem;
+      flex-shrink: 0;
+      position: sticky; top: 0; z-index: 40;
+    }
+    .topbar-left { display: flex; align-items: center; gap: 12px; }
+    .topbar-section { font-family: var(--serif); font-size: 1.05rem; color: var(--white); }
+    .topbar-crumb { font-size: 0.8rem; color: var(--silver-faint); }
+    .topbar-right { display: flex; align-items: center; gap: 1rem; }
+    .status-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--gold); background: var(--gold-glow2);
+      border: 1px solid rgba(201,168,76,0.2);
+      padding: 4px 10px; border-radius: 2px;
+    }
+    .status-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--gold); }
+    .status-dot.pulse { animation: pulse-dot 1.5s infinite; }
+    @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+    /* Content scroll area */
+    .content-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 2rem;
+    }
+    .content-scroll::-webkit-scrollbar { width: 4px; }
+    .content-scroll::-webkit-scrollbar-thumb { background: var(--rule-light); border-radius: 2px; }
+
+    /* Section visibility */
+    .dash-section { display: none; }
+    .dash-section.active { display: block; }
+
+    /* ── Section: Upload ──────────────────────────────────────────────────── */
+    .section-heading {
+      margin-bottom: 1.75rem;
+    }
+    .section-eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 0.7rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--gold); margin-bottom: 0.5rem;
+    }
+    .section-eyebrow::before { content:''; display:block; width:12px; height:1.5px; background:var(--gold); }
+    .section-title-text { font-family: var(--serif); font-size: 1.6rem; color: var(--white); line-height: 1.2; }
+    .section-desc { font-size: 0.88rem; color: var(--silver-dim); margin-top: 6px; }
+
+    .upload-card {
+      background: var(--ink-soft);
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      overflow: hidden;
+      max-width: 780px;
+    }
+    .upload-card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1.1rem 1.75rem;
+      border-bottom: 1px solid var(--rule);
+      background: var(--ink-mid);
+    }
+    .upload-card-label {
+      font-size: 0.75rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--silver-dim);
+    }
+    .upload-card-body { padding: 1.75rem; display: flex; flex-direction: column; gap: 1.5rem; }
+
+    .upload-zone {
+      border: 1px dashed var(--rule-light);
+      border-radius: 3px;
+      padding: 2.25rem 2rem;
+      text-align: center;
+      cursor: pointer;
+      position: relative;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: var(--gold); background: var(--gold-glow);
+    }
+    .upload-zone input[type="file"] { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; }
+    .upload-icon {
+      width: 44px; height: 44px; border: 1px solid var(--rule-light); border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 1rem; transition: border-color 0.2s;
+    }
+    .upload-zone:hover .upload-icon, .upload-zone.drag-over .upload-icon { border-color: var(--gold); }
+    .upload-icon svg { width: 18px; height: 18px; stroke: var(--silver-dim); fill: none; stroke-width: 1.5; transition: stroke 0.2s; }
+    .upload-zone:hover .upload-icon svg, .upload-zone.drag-over .upload-icon svg { stroke: var(--gold); }
+    .upload-primary { font-size: 0.92rem; font-weight: 600; color: var(--white); margin-bottom: 3px; }
+    .upload-secondary { font-size: 0.8rem; color: var(--silver-dim); }
+    .upload-secondary span { color: var(--gold); }
+    .upload-selected {
+      display: none; margin-top: 0.75rem;
+      padding: 7px 14px;
+      background: rgba(201,168,76,0.08); border: 1px solid rgba(201,168,76,0.2);
+      border-radius: 2px; font-family: var(--mono); font-size: 0.74rem; color: var(--gold);
+      align-items: center; gap: 7px;
+    }
+    .upload-selected.visible { display: inline-flex; }
+    .upload-selected svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+    .divider {
+      display: flex; align-items: center; gap: 1rem;
+      font-size: 0.7rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--silver-faint);
+    }
+    .divider::before, .divider::after { content:''; flex:1; height:1px; background:var(--rule); }
+
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field-label { font-size: 0.74rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--silver-dim); }
+    .field-label span { color: var(--silver-faint); font-weight: 400; text-transform: none; letter-spacing: 0; }
+    .field-input-wrap { position: relative; }
+    .field-prefix { position:absolute; left:12px; top:50%; transform:translateY(-50%); font-family:var(--mono); font-size:0.8rem; color:var(--silver-dim); pointer-events:none; }
+    .field-input {
+      width: 100%; background: var(--ink); border: 1px solid var(--rule-light); border-radius: 3px;
+      color: var(--white); font-family: var(--sans); font-size: 0.92rem; padding: 9px 13px; outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .field-input.has-prefix { padding-left: 26px; }
+    .field-input::placeholder { color: var(--silver-faint); }
+    .field-input:focus { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(201,168,76,0.1); }
+    .field-hint { font-size: 0.74rem; color: var(--silver-faint); }
+    .field-select {
+      width: 100%; background: var(--ink); border: 1px solid var(--rule-light); border-radius: 3px;
+      color: var(--white); font-family: var(--sans); font-size: 0.92rem; padding: 9px 13px; outline: none;
+      appearance: none; cursor: pointer; transition: border-color 0.15s;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237A8599' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center; padding-right: 30px;
+    }
+    .field-select:focus { border-color: var(--gold); }
+    .field-select option { background: var(--ink-mid); }
+
+    .model-toggle {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 0.78rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--silver-dim); cursor: pointer; user-select: none;
+      border: none; background: none; padding: 0;
+    }
+    .model-toggle:hover { color: var(--silver); }
+    .toggle-icon { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2.5; transition: transform 0.2s; }
+    .toggle-icon.open { transform: rotate(180deg); }
+    .model-config { display: none; padding-top: 0.75rem; }
+    .model-config.open { display: block; }
+    .model-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-top: 0.75rem; }
+
+    .key-status { display: flex; align-items: center; gap: 6px; font-size: 0.74rem; color: var(--silver-dim); margin-top: 4px; }
+    .key-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--silver-faint); flex-shrink: 0; }
+    .key-dot.ok { background: var(--success); }
+    .key-dot.err { background: var(--danger); }
+
+    .submit-row { display: flex; align-items: center; justify-content: space-between; padding-top: 0.25rem; }
+    .submit-note { font-size: 0.8rem; color: var(--silver-dim); max-width: 340px; line-height: 1.5; }
+
+    .btn-extract {
+      display: flex; align-items: center; gap: 9px;
+      background: var(--gold); border: none; border-radius: 3px;
+      color: var(--ink); font-family: var(--sans);
+      font-size: 0.92rem; font-weight: 700; letter-spacing: 0.04em;
+      padding: 10px 24px; cursor: pointer; transition: opacity 0.15s, transform 0.1s;
+      white-space: nowrap;
+    }
+    .btn-extract:hover:not(:disabled) { opacity: 0.88; }
+    .btn-extract:disabled { opacity: 0.35; cursor: not-allowed; }
+    .btn-extract svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2.5; }
+
+    .error-banner {
+      display: none; background: rgba(224,90,90,0.08);
+      border: 1px solid rgba(224,90,90,0.3); border-radius: 3px;
+      padding: 10px 14px; font-size: 0.82rem; color: #F8A0A0;
+    }
+    .error-banner.visible { display: block; }
+
+    /* ── Progress overlay ─────────────────────────────────────────────────── */
+    .progress-overlay {
+      display: none; position: fixed; inset: 0; z-index: 200;
+      background: rgba(10,13,20,0.92); backdrop-filter: blur(8px);
+      align-items: center; justify-content: center;
+    }
+    .progress-overlay.visible { display: flex; }
+    .progress-card {
+      width: 100%; max-width: 500px;
+      background: var(--ink-soft); border: 1px solid var(--rule-light);
+      border-radius: 4px; overflow: hidden;
+    }
+    .progress-card-header { padding: 1.4rem 1.75rem 1.2rem; border-bottom: 1px solid var(--rule); }
+    .progress-deal { font-family: var(--serif); font-size: 1.2rem; color: var(--white); }
+    .progress-sub { font-size: 0.74rem; color: var(--silver-dim); margin-top: 2px; }
+    .progress-steps { padding: 1.1rem 1.75rem; display: flex; flex-direction: column; gap: 0; }
+    .step { display: flex; align-items: flex-start; gap: 13px; padding: 9px 0; border-bottom: 1px solid var(--rule); }
+    .step:last-child { border-bottom: none; }
+    .step-indicator {
+      width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0; margin-top: 2px;
+      border: 1.5px solid var(--rule-light); background: var(--ink);
+      display: flex; align-items: center; justify-content: center; transition: all 0.3s;
+    }
+    .step-indicator.active { border-color: var(--gold); background: var(--gold-glow); }
+    .step-indicator.done { border-color: var(--success); background: rgba(61,184,122,0.15); }
+    .step-spinner { width: 8px; height: 8px; border: 1.5px solid rgba(201,168,76,0.3); border-top-color: var(--gold); border-radius: 50%; animation: spin 0.7s linear infinite; }
+    .step-check { display: none; width: 9px; height: 9px; stroke: var(--success); fill: none; stroke-width: 2.5; }
+    .step-indicator.done .step-spinner { display: none; }
+    .step-indicator.done .step-check { display: block; }
+    .step-indicator.pending .step-spinner { display: none; }
+    .step-label { font-size: 0.88rem; font-weight: 600; color: var(--silver); }
+    .step-label.active { color: var(--white); }
+    .step-sub { font-size: 0.76rem; color: var(--silver-dim); margin-top: 1px; }
+    .progress-log {
+      margin: 0 1.75rem 1.4rem;
+      background: var(--ink); border: 1px solid var(--rule); border-radius: 2px;
+      padding: 9px 13px; font-family: var(--mono); font-size: 0.75rem; color: var(--silver-faint);
+      line-height: 1.7; height: 76px; overflow-y: auto;
+    }
+    .progress-log-line { color: var(--silver-dim); }
+    .progress-log-line.err { color: var(--danger); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Section: Analysis ────────────────────────────────────────────────── */
+    .analysis-controls {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.75rem;
+    }
+    .job-count { font-size: 0.82rem; color: var(--silver-faint); }
+    .btn-ghost {
+      display: inline-flex; align-items: center; gap: 7px;
+      background: none; border: 1px solid var(--rule-light); border-radius: 3px;
+      color: var(--silver-dim); font-family: var(--sans); font-size: 0.82rem; font-weight: 500;
+      padding: 7px 14px; cursor: pointer; transition: border-color 0.15s, color 0.15s;
+    }
+    .btn-ghost svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .btn-ghost:hover { border-color: var(--gold); color: var(--gold); }
+    .btn-ghost.primary { border-color: rgba(201,168,76,0.4); color: var(--gold); background: var(--gold-glow2); }
+
+    .jobs-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 1rem;
+    }
+    .empty-state {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 4rem 2rem; text-align: center;
+      border: 1px dashed var(--rule-light); border-radius: 4px;
+      color: var(--silver-faint);
+    }
+    .empty-state svg { width: 40px; height: 40px; stroke: var(--rule-light); fill: none; stroke-width: 1; margin-bottom: 1rem; }
+    .empty-state-title { font-size: 1rem; font-weight: 600; color: var(--silver-dim); margin-bottom: 6px; }
+    .empty-state-sub { font-size: 0.82rem; }
+
+    .job-card {
+      background: var(--ink-soft);
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      overflow: hidden;
+      display: flex; flex-direction: column;
+      transition: border-color 0.15s;
+    }
+    .job-card:hover { border-color: var(--rule-light); }
+    .job-card-header {
+      padding: 1rem 1.25rem 0.85rem;
+      border-bottom: 1px solid var(--rule);
+      background: var(--ink-mid);
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem;
+    }
+    .job-card-name {
+      font-family: var(--serif); font-size: 1rem; color: var(--white);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px;
+    }
+    .job-card-file { font-size: 0.72rem; color: var(--silver-faint); font-family: var(--mono); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+      padding: 3px 8px; border-radius: 2px; flex-shrink: 0;
+    }
+    .status-badge.done    { color: var(--success); background: rgba(61,184,122,0.1); border: 1px solid rgba(61,184,122,0.25); }
+    .status-badge.error   { color: var(--danger);  background: rgba(224,90,90,0.08); border: 1px solid rgba(224,90,90,0.2); }
+    .status-badge.running { color: var(--gold);    background: var(--gold-glow2);   border: 1px solid rgba(201,168,76,0.2); }
+    .status-badge.queued  { color: var(--silver-faint); background: rgba(255,255,255,0.03); border: 1px solid var(--rule); }
+    .badge-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+    .badge-dot.anim { animation: pulse-dot 1.2s infinite; }
+
+    .job-card-body { padding: 1rem 1.25rem; flex: 1; }
+    .job-meta-row {
+      display: flex; flex-wrap: wrap; gap: 1rem;
+      margin-bottom: 0.85rem;
+    }
+    .job-meta-item { display: flex; flex-direction: column; gap: 2px; }
+    .job-meta-label { font-size: 0.65rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--silver-faint); }
+    .job-meta-value { font-size: 0.82rem; font-family: var(--mono); color: var(--silver-dim); }
+    .job-meta-value.highlight { color: var(--gold); }
+    .job-error-msg { font-size: 0.75rem; color: var(--danger); background: rgba(224,90,90,0.06); border: 1px solid rgba(224,90,90,0.15); border-radius: 2px; padding: 7px 10px; margin-bottom: 0.85rem; }
+    .job-card-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+    .btn-view {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--gold-glow); border: 1px solid rgba(201,168,76,0.3); border-radius: 3px;
+      color: var(--gold); font-family: var(--sans); font-size: 0.8rem; font-weight: 600;
+      padding: 7px 13px; cursor: pointer; transition: background 0.15s; text-decoration: none;
+    }
+    .btn-view:hover { background: rgba(201,168,76,0.18); }
+    .btn-view svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .btn-excel {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(61,184,122,0.08); border: 1px solid rgba(61,184,122,0.25); border-radius: 3px;
+      color: var(--success); font-family: var(--sans); font-size: 0.8rem; font-weight: 600;
+      padding: 7px 13px; cursor: pointer; transition: background 0.15s; text-decoration: none;
+    }
+    .btn-excel:hover { background: rgba(61,184,122,0.14); }
+    .btn-excel svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+    /* ── Section: Reports ─────────────────────────────────────────────────── */
+    .reports-table-wrap {
+      background: var(--ink-soft);
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .reports-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+    .reports-table thead th {
+      background: var(--ink-mid);
+      padding: 11px 16px;
+      text-align: left;
+      font-size: 0.7rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--silver-dim);
+      border-bottom: 1px solid var(--rule);
+    }
+    .reports-table tbody tr { border-bottom: 1px solid var(--rule); }
+    .reports-table tbody tr:last-child { border-bottom: none; }
+    .reports-table tbody tr:hover { background: rgba(255,255,255,0.015); }
+    .reports-table td { padding: 12px 16px; color: var(--silver); vertical-align: middle; }
+    .reports-table td.mono { font-family: var(--mono); font-size: 0.78rem; color: var(--silver-dim); }
+    .reports-table td.gold { color: var(--gold); font-family: var(--mono); font-size: 0.82rem; }
+    .reports-table-empty {
+      text-align: center; padding: 3rem; color: var(--silver-faint); font-size: 0.85rem;
+    }
+
+    @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+    .dash-section.active { animation: fadeUp 0.25s ease both; }
+  </style>
+</head>
+<body>
+
+<!-- ── Sidebar ──────────────────────────────────────────────────────────── -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/>
+        <polyline points="16 7 22 7 22 13"/>
+      </svg>
+    </div>
+    <div class="logo-text">
+      <span class="logo-title">CIM Intelligence</span>
+      <span class="logo-sub">Atar Capital</span>
+    </div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <span class="nav-section-label">Workspace</span>
+    <button class="nav-item active" id="nav-upload" onclick="switchSection('upload')">
+      <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      New Extraction
+    </button>
+    <button class="nav-item" id="nav-analysis" onclick="switchSection('analysis')">
+      <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+      Analysis
+      <span class="nav-badge" id="badge-analysis">0</span>
+    </button>
+    <button class="nav-item" id="nav-reports" onclick="switchSection('reports')">
+      <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      Downloaded Reports
+      <span class="nav-badge" id="badge-reports">0</span>
+    </button>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="user-block">
+      <div class="user-avatar" id="userAvatar">A</div>
+      <div class="user-info">
+        <span class="user-name" id="userName">Admin</span>
+        <span class="user-role">Analyst · Atar Capital</span>
+      </div>
+    </div>
+    <a href="/logout" class="btn-logout">
+      <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      Sign Out
+    </a>
+  </div>
+</aside>
+
+<!-- ── Main area ────────────────────────────────────────────────────────── -->
+<div class="main-area">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <span class="topbar-section" id="topbarTitle">New Extraction</span>
+    </div>
+    <div class="topbar-right">
+      <span class="status-pill" id="topbarStatus">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">Ready</span>
+      </span>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="content-scroll">
+
+    <!-- ── UPLOAD SECTION ──────────────────────────────────────────────── -->
+    <div class="dash-section active" id="sec-upload">
+      <div class="section-heading">
+        <div class="section-eyebrow">M&amp;A Deal Analysis</div>
+        <div class="section-title-text">Extract Financial Data<br>from Any CIM</div>
+        <div class="section-desc">Upload a Confidential Information Memorandum to automatically populate Revenue, EBITDA, CAPEX, and 13 more financial fields.</div>
+      </div>
+
+      <div class="upload-card">
+        <div class="upload-card-header">
+          <span class="upload-card-label">New Extraction</span>
+          <span style="font-size:0.72rem;color:var(--silver-faint);font-family:var(--mono);">PDF · up to 200MB</span>
+        </div>
+        <div class="upload-card-body">
+
+          <!-- Upload zone -->
+          <div class="upload-zone" id="uploadZone">
+            <input type="file" id="pdfInput" accept=".pdf" />
+            <div class="upload-icon">
+              <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="12" y1="18" x2="12" y2="12"/>
+                <line x1="9" y1="15" x2="15" y2="15"/>
+              </svg>
+            </div>
+            <div class="upload-primary">Drop CIM document here</div>
+            <div class="upload-secondary">PDF up to 200 MB &nbsp;·&nbsp; <span>Click to browse</span></div>
+            <div class="upload-selected" id="uploadSelected">
+              <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              <span id="uploadSelectedName"></span>
+            </div>
+          </div>
+
+          <div class="divider">Deal Information</div>
+
+          <div class="form-row">
+            <div class="field">
+              <label class="field-label" for="companyName">Company / Deal Name</label>
+              <input class="field-input" id="companyName" type="text" placeholder="e.g. Project Chimera" />
+              <span class="field-hint">Used to label the output file</span>
+            </div>
+            <div class="field">
+              <label class="field-label" for="dealValue">Deal Value <span>(optional)</span></label>
+              <div class="field-input-wrap">
+                <span class="field-prefix">$</span>
+                <input class="field-input has-prefix" id="dealValue" type="text" placeholder="e.g. 75000" />
+              </div>
+              <span class="field-hint">In $000s — 75000 = $75M · Leave blank to skip recommendation</span>
+              <span id="dealValueMsg" style="display:none;font-size:0.72rem;margin-top:2px;"></span>
+            </div>
+          </div>
+
+          <div class="divider">Model Configuration</div>
+
+          <div>
+            <button class="model-toggle" id="modelToggleBtn" onclick="toggleModelConfig()">
+              <svg class="toggle-icon" id="toggleIcon" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+              Configure LLM
+              <span id="modelSummary" style="font-family:var(--mono);font-weight:400;letter-spacing:0;text-transform:none;color:var(--silver-faint);font-size:0.7rem;">· nvidia / meta/llama-3.3-70b-instruct</span>
+            </button>
+            <div class="model-config" id="modelConfig">
+              <div class="model-row">
+                <div class="field">
+                  <label class="field-label">Provider</label>
+                  <select class="field-select" id="providerSelect" onchange="onProviderChange()">
+                    <option value="nvidia">NVIDIA LLaMA</option>
+                    <option value="anthropic">Anthropic Claude</option>
+                    <option value="deepseek">DeepSeek</option>
+                    <option value="ollama">Ollama (Cloud)</option>
+                    <option value="openai">OpenAI</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label class="field-label">Model</label>
+                  <select class="field-select" id="modelSelect" onchange="onModelChange()"></select>
+                  <input class="field-input" id="modelCustomInput" type="text" placeholder="Enter model name" oninput="updateModelSummary()" style="display:none;margin-top:5px;" />
+                </div>
+                <div class="field">
+                  <label class="field-label">API Key</label>
+                  <input class="field-input" id="apiKeyInput" type="password" placeholder="From .env" oninput="updateKeyStatus()" />
+                  <div class="key-status">
+                    <div class="key-dot" id="keyDot"></div>
+                    <span id="keyStatusText">Checking...</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="error-banner" id="errorBanner"></div>
+
+          <div class="submit-row">
+            <p class="submit-note">13 financial fields extracted — Revenue, EBITDA, CAPEX, Depreciation, Working Capital and more.</p>
+            <button class="btn-extract" id="extractBtn" onclick="startExtraction()">
+              <svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+              Run Extraction
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </div><!-- /upload -->
+
+    <!-- ── ANALYSIS SECTION ────────────────────────────────────────────── -->
+    <div class="dash-section" id="sec-analysis">
+      <div class="section-heading">
+        <div class="section-eyebrow">Extracted Reports</div>
+        <div class="section-title-text">Analysis</div>
+        <div class="section-desc">All processed CIM extractions — view results or download the pre-filled Excel template.</div>
+      </div>
+
+      <div class="analysis-controls">
+        <span class="job-count" id="jobCountLabel">Loading reports...</span>
+        <button class="btn-ghost" onclick="loadJobs()">
+          <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+          Refresh
+        </button>
+      </div>
+
+      <div id="jobsGrid" class="jobs-grid">
+        <div class="empty-state" style="grid-column:1/-1;">
+          <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <div class="empty-state-title">No extractions yet</div>
+          <div class="empty-state-sub">Upload a CIM PDF to get started</div>
+        </div>
+      </div>
+    </div><!-- /analysis -->
+
+    <!-- ── REPORTS SECTION ─────────────────────────────────────────────── -->
+    <div class="dash-section" id="sec-reports">
+      <div class="section-heading">
+        <div class="section-eyebrow">Completed Jobs</div>
+        <div class="section-title-text">Downloaded Reports</div>
+        <div class="section-desc">Pre-filled Prebid V31 Excel templates ready for download.</div>
+      </div>
+
+      <div class="analysis-controls">
+        <span class="job-count" id="reportCountLabel">Loading...</span>
+        <button class="btn-ghost" onclick="loadReports()">
+          <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+          Refresh
+        </button>
+      </div>
+
+      <div class="reports-table-wrap">
+        <table class="reports-table" id="reportsTable">
+          <thead>
+            <tr>
+              <th>Deal / Company</th>
+              <th>File</th>
+              <th>Deal Value</th>
+              <th>Fields</th>
+              <th style="text-align:right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="reportsBody">
+            <tr><td colspan="5" class="reports-table-empty">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div><!-- /reports -->
+
+  </div><!-- /content-scroll -->
+</div><!-- /main-area -->
+
+<!-- ── Progress Overlay ──────────────────────────────────────────────────── -->
+<div class="progress-overlay" id="progressOverlay">
+  <div class="progress-card">
+    <div class="progress-card-header">
+      <div class="progress-deal" id="progressDeal">Processing...</div>
+      <div class="progress-sub" id="progressSub">Initialising extraction pipeline</div>
+    </div>
+    <div class="progress-steps">
+      <div class="step">
+        <div class="step-indicator pending" id="ind-parsing"><div class="step-spinner"></div><svg class="step-check" viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></div>
+        <div><div class="step-label" id="lbl-parsing">Parsing PDF</div><div class="step-sub">Extracting text &amp; tables</div></div>
+      </div>
+      <div class="step">
+        <div class="step-indicator pending" id="ind-filtering"><div class="step-spinner"></div><svg class="step-check" viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></div>
+        <div><div class="step-label" id="lbl-filtering">Filtering Sections</div><div class="step-sub">Identifying financial content</div></div>
+      </div>
+      <div class="step">
+        <div class="step-indicator pending" id="ind-extracting"><div class="step-spinner"></div><svg class="step-check" viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></div>
+        <div><div class="step-label" id="lbl-extracting">LLM Extraction</div><div class="step-sub">Sending to model — typically 30–90s</div></div>
+      </div>
+      <div class="step">
+        <div class="step-indicator pending" id="ind-done"><div class="step-spinner"></div><svg class="step-check" viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></div>
+        <div><div class="step-label" id="lbl-done">Complete</div><div class="step-sub">Results saved</div></div>
+      </div>
+    </div>
+    <div class="progress-log" id="progressLog"></div>
+  </div>
+</div>
+
+<script>
+/* ── Config ────────────────────────────────────────────────────────────── */
+const MODELS = {
+  nvidia:    ["moonshotai/kimi-k2.5","meta/llama-3.3-70b-instruct","meta/llama-3.1-405b-instruct","meta/llama-3.1-70b-instruct"],
+  anthropic: ["claude-haiku-4-5-20251001","claude-sonnet-4-6","claude-opus-4-6"],
+  deepseek:  ["deepseek-chat","deepseek-reasoner"],
+  ollama:    ["glm-z1:9b","glm-z1:32b","glm4:9b","glm4:27b","qwen2.5:72b","qwen2.5:32b","qwen2.5:14b","qwen2.5:7b","deepseek-r1:70b","deepseek-r1:32b","deepseek-r1:14b","deepseek-r1:7b","llama3.3:70b","llama3.1:70b","llama3.1:8b","gemma4:27b","gemma4:12b","mistral:7b","mixtral:8x7b","phi4:14b","phi4-mini:3.8b","custom..."],
+  openai:    ["gpt-4o","gpt-4o-mini"],
+};
+
+const SECTION_TITLES = { upload: "New Extraction", analysis: "Analysis", reports: "Downloaded Reports" };
+
+let envKeys = {}, currentJobId = null, pollTimer = null, allJobs = [];
+
+/* ── Init ──────────────────────────────────────────────────────────────── */
+window.addEventListener("DOMContentLoaded", async () => {
+  populateModels();
+  try { const r = await fetch("/api/env-keys"); envKeys = await r.json(); } catch(_){}
+  updateKeyStatus();
+  setupDragDrop();
+  setupLiveValidation();
+  loadJobs();
+  setInterval(loadJobs, 8000); // auto-refresh every 8 seconds
+});
+
+/* ── Section switching ─────────────────────────────────────────────────── */
+function switchSection(name) {
+  document.querySelectorAll(".dash-section").forEach(el => el.classList.remove("active"));
+  document.querySelectorAll(".nav-item").forEach(el => el.classList.remove("active"));
+  document.getElementById("sec-" + name).classList.add("active");
+  document.getElementById("nav-" + name).classList.add("active");
+  document.getElementById("topbarTitle").textContent = SECTION_TITLES[name] || name;
+  if (name === "analysis") loadJobs();
+  if (name === "reports")  loadReports();
+}
+
+/* ── Model/Provider ────────────────────────────────────────────────────── */
+function populateModels() {
+  const prov = document.getElementById("providerSelect").value;
+  const sel  = document.getElementById("modelSelect");
+  sel.innerHTML = "";
+  (MODELS[prov]||[]).forEach(m => { const o=document.createElement("option"); o.value=m; o.textContent=m; sel.appendChild(o); });
+  document.getElementById("modelCustomInput").style.display = "none";
+  document.getElementById("modelCustomInput").value = "";
+  updateModelSummary();
+}
+function onProviderChange() { populateModels(); updateKeyStatus(); }
+function onModelChange() {
+  const v = document.getElementById("modelSelect").value;
+  const ci = document.getElementById("modelCustomInput");
+  ci.style.display = (v === "custom...") ? "block" : "none";
+  if (v !== "custom...") ci.value = "";
+  updateModelSummary();
+}
+function _resolvedModel() {
+  const v = document.getElementById("modelSelect").value;
+  return v === "custom..." ? document.getElementById("modelCustomInput").value.trim() : v;
+}
+function updateModelSummary() {
+  const prov = document.getElementById("providerSelect").value;
+  const model = _resolvedModel();
+  document.getElementById("modelSummary").textContent = `· ${prov} / ${model || "custom..."}`;
+}
+function toggleModelConfig() {
+  document.getElementById("modelConfig").classList.toggle("open");
+  document.getElementById("toggleIcon").classList.toggle("open");
+}
+
+/* ── Key status ────────────────────────────────────────────────────────── */
+function updateKeyStatus() {
+  const prov = document.getElementById("providerSelect").value;
+  const manual = document.getElementById("apiKeyInput").value.trim();
+  const dot = document.getElementById("keyDot"), txt = document.getElementById("keyStatusText");
+  if (manual) { dot.className="key-dot ok"; txt.textContent="Manual key active"; return; }
+  if (envKeys[prov]) { dot.className="key-dot ok"; txt.textContent="Loaded from .env"; }
+  else { dot.className="key-dot err"; txt.textContent="Not found in .env"; }
+}
+
+/* ── Drag & drop ───────────────────────────────────────────────────────── */
+function setupDragDrop() {
+  const zone = document.getElementById("uploadZone");
+  zone.addEventListener("dragover", e => { e.preventDefault(); zone.classList.add("drag-over"); });
+  zone.addEventListener("dragleave", () => zone.classList.remove("drag-over"));
+  zone.addEventListener("drop", e => {
+    e.preventDefault(); zone.classList.remove("drag-over");
+    const f = e.dataTransfer.files[0];
+    if (f && f.name.endsWith(".pdf")) {
+      const dt = new DataTransfer(); dt.items.add(f);
+      document.getElementById("pdfInput").files = dt.files;
+      onFileSelected(f.name);
+    }
+  });
+  document.getElementById("pdfInput").addEventListener("change", e => {
+    if (e.target.files[0]) onFileSelected(e.target.files[0].name);
+  });
+}
+function onFileSelected(name) {
+  document.getElementById("uploadSelectedName").textContent = name;
+  document.getElementById("uploadSelected").classList.add("visible");
+  document.querySelector(".upload-primary").textContent = "PDF ready";
+}
+
+/* ── Live validation ───────────────────────────────────────────────────── */
+function setupLiveValidation() {
+  document.getElementById("dealValue").addEventListener("input", e => {
+    const val = e.target.value.trim();
+    const msg = document.getElementById("dealValueMsg");
+    if (!val) { msg.style.display="none"; e.target.style.borderColor=""; return; }
+    const num = parseFloat(val.replace(/[$,]/g,""));
+    let text="", color="";
+    if (isNaN(num))         { text="Must be a number — e.g. 75000 for $75M"; color="var(--danger)"; }
+    else if (num<=0)        { text="Must be positive"; color="var(--danger)"; }
+    else if (num<10000)     { text="Too low — enter in $000s (75000 = $75M)"; color="var(--danger)"; }
+    else if (num>10000000)  { text="Seems too high — enter in $000s"; color="var(--danger)"; }
+    else                    { text="$"+num.toLocaleString()+"K = $"+(num/1000).toFixed(1)+"M"; color="var(--success)"; }
+    msg.textContent=text; msg.style.color=color; msg.style.display="block";
+    e.target.style.borderColor=color;
+  });
+}
+
+/* ── Error helpers ─────────────────────────────────────────────────────── */
+function escHtml(s) { return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function showError(msg) { const b=document.getElementById("errorBanner"); b.textContent=msg; b.classList.add("visible"); }
+function hideError() { document.getElementById("errorBanner").classList.remove("visible"); }
+
+/* ── Extraction ────────────────────────────────────────────────────────── */
+async function startExtraction() {
+  hideError();
+  const pdfInput = document.getElementById("pdfInput");
+  if (!pdfInput.files[0]) { showError("Please upload a CIM PDF before running."); return; }
+  const model = _resolvedModel();
+  if (!model) { showError("Please enter a model name."); return; }
+  const provider    = document.getElementById("providerSelect").value;
+  const apiKey      = document.getElementById("apiKeyInput").value.trim();
+  const companyName = document.getElementById("companyName").value.trim();
+  const dealValue   = document.getElementById("dealValue").value.trim();
+  if (dealValue) {
+    const n = parseFloat(dealValue.replace(/[$,]/g,""));
+    if (isNaN(n)||n<=0) { showError("Deal value must be a positive number."); return; }
+    if (n<10000)         { showError("Deal value seems too low — enter in $000s."); return; }
+    if (n>10000000)      { showError("Deal value seems too high — enter in $000s."); return; }
+  }
+  const fd = new FormData();
+  fd.append("pdf", pdfInput.files[0]);
+  fd.append("provider", provider);
+  fd.append("model", model);
+  fd.append("deal_name", companyName);
+  fd.append("deal_value", dealValue);
+  if (apiKey) fd.append("api_key", apiKey);
+
+  document.getElementById("extractBtn").disabled = true;
+  setStatus("Running...", true);
+  showProgress(companyName || pdfInput.files[0].name);
+  resetSteps();
+  setStep("parsing","active");
+
+  try {
+    const res = await fetch("/api/extract", { method:"POST", body:fd });
+    const data = await res.json();
+    if (!res.ok) { hideProgress(); showError(data.error||"Server error"); document.getElementById("extractBtn").disabled=false; setStatus("Error"); return; }
+    currentJobId = data.job_id;
+    pollTimer = setInterval(pollStatus, 1500);
+  } catch(e) {
+    hideProgress(); showError(String(e));
+    document.getElementById("extractBtn").disabled=false; setStatus("Ready");
+  }
+}
+
+async function pollStatus() {
+  if (!currentJobId) return;
+  try {
+    const res = await fetch(`/api/status/${currentJobId}`);
+    const data = await res.json();
+    const log = document.getElementById("progressLog");
+    log.innerHTML = data.log.map(l=>`<div class="progress-log-line ${l.includes("ERROR")?"err":""}">${escHtml(l)}</div>`).join("");
+    log.scrollTop = log.scrollHeight;
+    const s = data.status;
+    if (s==="parsing")      { setStep("parsing","active"); setSubtitle("Parsing PDF pages..."); }
+    if (s==="filtering")    { setStep("parsing","done"); setStep("filtering","active"); setSubtitle("Filtering financial sections..."); }
+    if (s==="extracting")   { setStep("parsing","done"); setStep("filtering","done"); setStep("extracting","active"); setSubtitle("LLM extraction in progress..."); }
+    if (s==="recommending") { setStep("parsing","done"); setStep("filtering","done"); setStep("extracting","done"); setSubtitle("Generating investment recommendation..."); }
+    if (s==="done") {
+      clearInterval(pollTimer);
+      ["parsing","filtering","extracting","done"].forEach(id=>setStep(id,"done"));
+      setSubtitle("Extraction complete");
+      setStatus("Complete");
+      setTimeout(() => {
+        hideProgress();
+        document.getElementById("extractBtn").disabled = false;
+        loadJobs();
+        switchSection("analysis");
+      }, 900);
+    }
+    if (s==="error") {
+      clearInterval(pollTimer);
+      hideProgress();
+      showError(data.error||"Extraction failed.");
+      document.getElementById("extractBtn").disabled=false;
+      setStatus("Error");
+    }
+  } catch(e) { console.error(e); }
+}
+
+/* ── Progress helpers ──────────────────────────────────────────────────── */
+function showProgress(name) {
+  document.getElementById("progressDeal").textContent = name||"Processing...";
+  document.getElementById("progressSub").textContent = "Initialising extraction pipeline";
+  document.getElementById("progressOverlay").classList.add("visible");
+}
+function hideProgress() { document.getElementById("progressOverlay").classList.remove("visible"); }
+function setSubtitle(t) { document.getElementById("progressSub").textContent = t; }
+function resetSteps() {
+  ["parsing","filtering","extracting","recommending","done"].forEach(id => {
+    const el = document.getElementById("ind-"+id);
+    if (el) { el.className="step-indicator pending"; }
+  });
+}
+function setStep(id, state) {
+  const el = document.getElementById("ind-"+id);
+  if (!el) return;
+  el.className = "step-indicator " + state;
+  const lbl = document.getElementById("lbl-"+id);
+  if (lbl) { lbl.className = "step-label" + (state==="active"?" active":""); }
+}
+function setStatus(text, pulse=false) {
+  document.getElementById("statusText").textContent = text;
+  document.getElementById("statusDot").className = "status-dot" + (pulse?" pulse":"");
+}
+
+/* ── Jobs (Analysis section) ───────────────────────────────────────────── */
+async function loadJobs() {
+  try {
+    const r = await fetch("/api/jobs");
+    if (!r.ok) return;
+    allJobs = await r.json();
+    renderJobs();
+    updateBadges();
+  } catch(_){}
+}
+
+function renderJobs() {
+  const grid = document.getElementById("jobsGrid");
+  const label = document.getElementById("jobCountLabel");
+  if (!allJobs.length) {
+    label.textContent = "No extractions yet";
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">
+      <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      <div class="empty-state-title">No extractions yet</div>
+      <div class="empty-state-sub">Upload a CIM PDF to get started</div>
+    </div>`;
+    return;
+  }
+  label.textContent = `${allJobs.length} report${allJobs.length!==1?"s":""}`;
+  grid.innerHTML = allJobs.map(j => jobCard(j)).join("");
+}
+
+function jobCard(j) {
+  const name = j.deal_name || j.filename || "Unnamed";
+  const file = j.filename || "—";
+  const isDone = j.status === "done";
+  const isRunning = ["queued","parsing","filtering","extracting","recommending"].includes(j.status);
+  const isError = j.status === "error";
+
+  let badgeHtml = "";
+  if (isDone)    badgeHtml = `<span class="status-badge done"><span class="badge-dot"></span>Done</span>`;
+  else if (isError) badgeHtml = `<span class="status-badge error"><span class="badge-dot"></span>Error</span>`;
+  else if (isRunning) badgeHtml = `<span class="status-badge running"><span class="badge-dot anim"></span>${j.status}</span>`;
+  else badgeHtml = `<span class="status-badge queued"><span class="badge-dot"></span>Queued</span>`;
+
+  let actionsHtml = "";
+  if (isDone) {
+    actionsHtml = `
+      <a class="btn-view" href="/results?job=${escHtml(j.job_id)}" target="_blank">
+        <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        View Results
+      </a>
+      <a class="btn-excel" href="/api/download-excel/${escHtml(j.job_id)}" target="_blank">
+        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download Excel
+      </a>`;
+  } else if (isRunning) {
+    actionsHtml = `<span style="font-size:0.78rem;color:var(--silver-faint);font-family:var(--mono);">Processing...</span>`;
+  } else if (isError) {
+    actionsHtml = `<span style="font-size:0.78rem;color:var(--danger);">Failed — see error above</span>`;
+  }
+
+  return `<div class="job-card">
+    <div class="job-card-header">
+      <div>
+        <div class="job-card-name">${escHtml(name)}</div>
+        <div class="job-card-file">${escHtml(file)}</div>
+      </div>
+      ${badgeHtml}
+    </div>
+    <div class="job-card-body">
+      <div class="job-meta-row">
+        <div class="job-meta-item">
+          <span class="job-meta-label">Fields</span>
+          <span class="job-meta-value ${j.field_count>0?"highlight":""}">${j.field_count||"—"}</span>
+        </div>
+        ${j.deal_value ? `<div class="job-meta-item"><span class="job-meta-label">Deal Value</span><span class="job-meta-value">$${escHtml(j.deal_value)}K</span></div>` : ""}
+        <div class="job-meta-item">
+          <span class="job-meta-label">Job ID</span>
+          <span class="job-meta-value" style="font-size:0.68rem;">${escHtml(j.job_id.slice(0,8))}…</span>
+        </div>
+      </div>
+      ${isError && j.error ? `<div class="job-error-msg">${escHtml(j.error)}</div>` : ""}
+      <div class="job-card-actions">${actionsHtml}</div>
+    </div>
+  </div>`;
+}
+
+/* ── Reports section ───────────────────────────────────────────────────── */
+async function loadReports() {
+  try {
+    const r = await fetch("/api/jobs");
+    if (!r.ok) return;
+    const jobs = await r.json();
+    renderReports(jobs.filter(j => j.status === "done"));
+  } catch(_){}
+}
+
+function renderReports(jobs) {
+  const body = document.getElementById("reportsBody");
+  const label = document.getElementById("reportCountLabel");
+  label.textContent = `${jobs.length} completed report${jobs.length!==1?"s":""}`;
+  updateBadges();
+  if (!jobs.length) {
+    body.innerHTML = `<tr><td colspan="5" class="reports-table-empty">No completed extractions yet</td></tr>`;
+    return;
+  }
+  body.innerHTML = jobs.map(j => `<tr>
+    <td><strong style="color:var(--white);font-size:0.88rem;">${escHtml(j.deal_name||"Unnamed")}</strong></td>
+    <td class="mono">${escHtml(j.filename||"—")}</td>
+    <td class="gold">${j.deal_value?"$"+escHtml(j.deal_value)+"K":"—"}</td>
+    <td class="mono">${j.field_count||"—"}</td>
+    <td style="text-align:right;">
+      <div style="display:flex;gap:0.5rem;justify-content:flex-end;flex-wrap:wrap;">
+        <a class="btn-view" href="/results?job=${escHtml(j.job_id)}" target="_blank">
+          <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          Results
+        </a>
+        <a class="btn-excel" href="/api/download-excel/${escHtml(j.job_id)}" target="_blank">
+          <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Excel
+        </a>
+      </div>
+    </td>
+  </tr>`).join("");
+}
+
+/* ── Badges ────────────────────────────────────────────────────────────── */
+function updateBadges() {
+  document.getElementById("badge-analysis").textContent = allJobs.length;
+  const done = allJobs.filter(j => j.status === "done").length;
+  document.getElementById("badge-reports").textContent = done;
+}
+</script>
+</body>
+</html>
