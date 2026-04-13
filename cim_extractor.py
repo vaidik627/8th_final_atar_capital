@@ -51,11 +51,15 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 def _extract_json_from_text(text: str) -> str:
     """
     Robustly extract JSON from LLM output.
+    Step 0: Strip <think>...</think> reasoning blocks (Kimi K2.5, DeepSeek R1, GLM-Z1, etc.).
     Strategy 1: ```json ... ``` fences.
     Strategy 2: ``` ... ``` fences (no language tag).
     Strategy 3: find the first '{' and last '}' (raw JSON, no fences).
     Falls back to returning the original text so json.loads can raise a clear error.
     """
+    # Step 0 — strip reasoning/thinking blocks before looking for JSON
+    text = re.sub(r"<think>[\s\S]*?</think>", "", text, flags=re.IGNORECASE).strip()
+
     # Strategy 1 & 2 — markdown fences
     fence = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
     if fence:
@@ -409,8 +413,17 @@ class LLMExtractor:
                 self.client = OpenAI(base_url=base_url, api_key=self.api_key)
             except ImportError:
                 raise ImportError("Please install openai: pip install openai")
+        elif self.provider == "deepseek":
+            try:
+                from openai import OpenAI
+                self.client = OpenAI(
+                    base_url="https://api.deepseek.com/v1",
+                    api_key=self.api_key
+                )
+            except ImportError:
+                raise ImportError("Please install openai: pip install openai")
         else:
-            raise ValueError("Unsupported provider. Choose 'openai', 'anthropic', 'nvidia', or 'ollama'.")
+            raise ValueError("Unsupported provider. Choose 'openai', 'anthropic', 'nvidia', 'ollama', or 'deepseek'.")
 
     def map_to_excel_columns(self, extracted_data: Dict) -> Dict:
         """
@@ -1282,26 +1295,28 @@ class LLMExtractor:
 
         for attempt in range(3):
             try:
-                if self.provider in ["openai", "nvidia", "ollama"]:
+                if self.provider in ["openai", "nvidia", "ollama", "deepseek"]:
+                    _is_kimi = self.model_name == "moonshotai/kimi-k2.5"
                     kwargs = {
                         "model": self.model_name,
                         "messages": [
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": user_prompt}
                         ],
-                        "temperature": 0.2 if self.provider == "nvidia" else 0.0,
+                        "temperature": 1.0 if _is_kimi else (0.2 if self.provider == "nvidia" else 0.0),
                     }
 
-                    if self.provider == "openai":
+                    if self.provider in ["openai", "deepseek"]:
                         kwargs["response_format"] = {"type": "json_object"}
                     elif self.provider == "ollama":
                         kwargs["temperature"] = 0.1
                         kwargs["max_tokens"] = 8192
-                    else:
-                        kwargs["top_p"] = 0.7
-                        kwargs["max_tokens"] = 8192
+                    else:  # nvidia (incl. kimi)
+                        kwargs["top_p"] = 1.0 if _is_kimi else 0.7
+                        kwargs["max_tokens"] = 16384 if _is_kimi else 8192
 
-                    response = self.client.chat.completions.create(**kwargs)
+                    extra = {"chat_template_kwargs": {"thinking": True}} if _is_kimi else {}
+                    response = self.client.chat.completions.create(**kwargs, extra_body=extra if extra else None)
                     output = response.choices[0].message.content
                     output = _extract_json_from_text(output)
                     return self._normalize_nulls(json.loads(output.strip()))
@@ -1460,24 +1475,26 @@ class LLMExtractor:
 
         logging.info(f"Generating investment recommendation (deal value: ${deal_value:,.0f})...")
         try:
-            if self.provider in ["openai", "nvidia", "ollama"]:
+            if self.provider in ["openai", "nvidia", "ollama", "deepseek"]:
+                _is_kimi = self.model_name == "moonshotai/kimi-k2.5"
                 kwargs = {
                     "model": self.model_name,
                     "messages": [
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}
                     ],
-                    "temperature": 0.1,
+                    "temperature": 1.0 if _is_kimi else 0.1,
                 }
-                if self.provider == "openai":
+                if self.provider in ["openai", "deepseek"]:
                     kwargs["response_format"] = {"type": "json_object"}
                 elif self.provider == "nvidia":
-                    kwargs["top_p"] = 0.7
-                    kwargs["max_tokens"] = 6144
+                    kwargs["top_p"] = 1.0 if _is_kimi else 0.7
+                    kwargs["max_tokens"] = 16384 if _is_kimi else 6144
                 elif self.provider == "ollama":
                     kwargs["max_tokens"] = 6144
 
-                response = self.client.chat.completions.create(**kwargs)
+                extra = {"chat_template_kwargs": {"thinking": True}} if _is_kimi else {}
+                response = self.client.chat.completions.create(**kwargs, extra_body=extra if extra else None)
                 output = response.choices[0].message.content
                 output = _extract_json_from_text(output)
                 return json.loads(output.strip())
@@ -1709,7 +1726,7 @@ def main():
         default=DEFAULT_CLIENT_REQ,
         help="Description of exactly what you want extracted from the financials."
     )
-    parser.add_argument("--provider", type=str, default="openai", choices=["openai", "anthropic", "nvidia", "ollama"], help="LLM Provider to use (openai, anthropic, nvidia, or ollama).")
+    parser.add_argument("--provider", type=str, default="openai", choices=["openai", "anthropic", "nvidia", "ollama", "deepseek"], help="LLM Provider to use (openai, anthropic, nvidia, ollama, or deepseek).")
     parser.add_argument("--model", type=str, default="gpt-4o", help="Model name (e.g., gpt-4o, claude-3-5-sonnet-20240620, meta/llama-3.3-70b-instruct)")
     parser.add_argument("--api-key", type=str, default=None, help="API key (overrides environment variable).")
     parser.add_argument("--deal-value", type=float, default=None, help="Enterprise value / deal price being considered (in USD). If provided, generates an investment recommendation.")

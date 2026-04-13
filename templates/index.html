@@ -510,13 +510,15 @@
                 <select class="field-select" id="providerSelect" onchange="onProviderChange()">
                   <option value="nvidia">NVIDIA LLaMA 70B</option>
                   <option value="anthropic">Anthropic Claude</option>
+                  <option value="deepseek">DeepSeek</option>
                   <option value="ollama">Ollama (Cloud)</option>
                   <option value="openai">OpenAI</option>
                 </select>
               </div>
               <div class="field">
                 <label class="field-label">Model</label>
-                <select class="field-select" id="modelSelect" onchange="updateModelSummary()"></select>
+                <select class="field-select" id="modelSelect" onchange="onModelChange()"></select>
+                <input class="field-input" id="modelCustomInput" type="text" placeholder="Enter model name (e.g. glm4:9b)" oninput="updateModelSummary()" style="display:none;margin-top:6px;" />
               </div>
               <div class="field">
                 <label class="field-label">API Key</label>
@@ -627,9 +629,41 @@
 <script>
 /* ── Config ────────────────────────────────────────────────────────────── */
 const MODELS = {
-  nvidia:    ["meta/llama-3.3-70b-instruct","meta/llama-3.1-405b-instruct","meta/llama-3.1-70b-instruct"],
+  nvidia:    ["moonshotai/kimi-k2.5","meta/llama-3.3-70b-instruct","meta/llama-3.1-405b-instruct","meta/llama-3.1-70b-instruct"],
   anthropic: ["claude-haiku-4-5-20251001","claude-sonnet-4-6","claude-opus-4-6"],
-  ollama:    ["gemma4:31b","gemma4:12b","llama3.3:70b"],
+  deepseek:  ["deepseek-chat","deepseek-reasoner"],
+  ollama: [
+    // ── GLM (ZhipuAI / THUDM) ──────────────────────────────────────────
+    "glm-z1:9b",
+    "glm-z1:32b",
+    "glm4:9b",
+    "glm4:27b",
+    // ── Qwen 2.5 (Alibaba) ─────────────────────────────────────────────
+    "qwen2.5:72b",
+    "qwen2.5:32b",
+    "qwen2.5:14b",
+    "qwen2.5:7b",
+    // ── DeepSeek R1 ────────────────────────────────────────────────────
+    "deepseek-r1:70b",
+    "deepseek-r1:32b",
+    "deepseek-r1:14b",
+    "deepseek-r1:7b",
+    // ── Llama 3.x (Meta) ───────────────────────────────────────────────
+    "llama3.3:70b",
+    "llama3.1:70b",
+    "llama3.1:8b",
+    // ── Gemma 4 (Google) ───────────────────────────────────────────────
+    "gemma4:27b",
+    "gemma4:12b",
+    // ── Mistral / Mixtral ──────────────────────────────────────────────
+    "mistral:7b",
+    "mixtral:8x7b",
+    // ── Phi 4 (Microsoft) ──────────────────────────────────────────────
+    "phi4:14b",
+    "phi4-mini:3.8b",
+    // ── Custom (type below) ────────────────────────────────────────────
+    "custom...",
+  ],
   openai:    ["gpt-4o","gpt-4o-mini"],
 };
 
@@ -666,15 +700,39 @@ function populateModels() {
     const o = document.createElement("option");
     o.value = m; o.textContent = m; sel.appendChild(o);
   });
+  // Hide custom input when provider changes
+  document.getElementById("modelCustomInput").style.display = "none";
+  document.getElementById("modelCustomInput").value = "";
   updateModelSummary();
 }
 
 function onProviderChange() { populateModels(); updateKeyStatus(); }
 
+function onModelChange() {
+  const sel = document.getElementById("modelSelect");
+  const customInput = document.getElementById("modelCustomInput");
+  if (sel.value === "custom...") {
+    customInput.style.display = "block";
+    customInput.focus();
+  } else {
+    customInput.style.display = "none";
+    customInput.value = "";
+  }
+  updateModelSummary();
+}
+
+function _resolvedModel() {
+  const sel = document.getElementById("modelSelect");
+  if (sel.value === "custom...") {
+    return document.getElementById("modelCustomInput").value.trim() || "";
+  }
+  return sel.value;
+}
+
 function updateModelSummary() {
   const prov  = document.getElementById("providerSelect").value;
-  const model = document.getElementById("modelSelect").value;
-  document.getElementById("modelSummary").textContent = `· ${prov} / ${model}`;
+  const model = _resolvedModel();
+  document.getElementById("modelSummary").textContent = `· ${prov} / ${model || "custom..."}`;
 }
 
 function toggleModelConfig() {
@@ -761,7 +819,8 @@ async function startExtraction() {
   if (!pdfInput.files[0]) { showError("Please upload a CIM PDF before running."); return; }
 
   const provider   = document.getElementById("providerSelect").value;
-  const model      = document.getElementById("modelSelect").value;
+  const model      = _resolvedModel();
+  if (!model) { showError("Please enter a model name in the custom model field."); return; }
   const apiKey     = document.getElementById("apiKeyInput").value.trim();
   const companyName = document.getElementById("companyName").value.trim();
   const dealValue  = document.getElementById("dealValue").value.trim();

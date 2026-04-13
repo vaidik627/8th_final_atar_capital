@@ -639,8 +639,9 @@
     .rec-scorecard-rows { display: flex; flex-direction: column; gap: 10px; }
     .rec-score-row {
       display: grid; grid-template-columns: 160px 1fr auto;
-      align-items: center; gap: 14px;
+      align-items: start; gap: 14px;
     }
+    .rec-score-bar-wrap { flex-direction: column; align-items: flex-start; }
     .rec-score-dim {
       font-size: 0.82rem; font-weight: 600; color: var(--silver-dim);
     }
@@ -659,7 +660,7 @@
     .rec-score-pip.filled-5 { background: var(--success); }
     .rec-score-note {
       font-size: 0.78rem; color: var(--silver-faint);
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      white-space: normal; line-height: 1.5;
     }
     .rec-score-num {
       font-family: var(--mono); font-size: 0.8rem; font-weight: 700;
@@ -728,14 +729,29 @@
     }
 
     /* ── Company Summary card ── */
-    .summary-card {
+    .summary-section-wrap {
       background: var(--ink-soft);
       border: 1px solid var(--rule);
-      border-radius: 3px; padding: 24px 28px;
+      border-top: 2px solid var(--gold);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .summary-inner {
+      padding: 28px 32px;
+    }
+    .summary-eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 0.7rem; font-weight: 700; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--gold);
+      margin-bottom: 16px;
+    }
+    .summary-eyebrow::before {
+      content: ''; display: block;
+      width: 14px; height: 1.5px; background: var(--gold);
     }
     .summary-text {
-      font-size: 0.94rem; line-height: 1.85;
-      color: var(--silver); max-width: 900px;
+      font-size: 0.93rem; line-height: 2.0;
+      color: var(--silver); font-weight: 400;
     }
     .summary-text.null { color: var(--silver-faint); font-style: italic; }
   </style>
@@ -965,41 +981,62 @@ function renderResults() {
   });
 
   /* Special non-tabular sections */
-  if (rawData.Company_KPIs != null) {
-    sections.insertBefore(buildCompanyKPIsSection(rawData.Company_KPIs), sections.firstChild);
+
+  // 1. Company Summary — always first (if present)
+  if (rawData.Company_Summary !== undefined) {
+    sections.insertBefore(buildCompanySummarySection(rawData.Company_Summary), sections.firstChild);
   }
+
+  // 2. Company KPIs (Snapshot) — directly after Summary
+  if (rawData.Company_KPIs != null) {
+    const summaryEl = sections.querySelector(".section-wrap");
+    const kpisEl = buildCompanyKPIsSection(rawData.Company_KPIs);
+    if (summaryEl) summaryEl.after(kpisEl);
+    else sections.insertBefore(kpisEl, sections.firstChild);
+  }
+
+  // 3. Revenue by Segment — after KPIs block
   if (Array.isArray(rawData.Revenue_By_Segment) && rawData.Revenue_By_Segment.length > 0) {
-    const kpiSection = sections.querySelector(".section-wrap");
+    const anchor = sections.querySelector(".section-wrap:last-of-type") || sections.firstChild;
     const segSection = buildSegmentDonutSection(rawData.Revenue_By_Segment);
-    if (kpiSection) kpiSection.after(segSection);
+    if (anchor) anchor.after(segSection);
     else sections.insertBefore(segSection, sections.firstChild);
   }
+
+  // 4. Customer Concentration
   if (Array.isArray(rawData.Customer_Concentration) && rawData.Customer_Concentration.length > 0) {
-    const lastTopSection = sections.querySelector(".section-wrap:last-of-type") || sections.firstChild;
+    const anchor = sections.querySelector(".section-wrap:last-of-type") || sections.firstChild;
     const concSection = buildCustomerConcentrationSection(rawData.Customer_Concentration);
-    if (lastTopSection) lastTopSection.after(concSection);
+    if (anchor) anchor.after(concSection);
     else sections.insertBefore(concSection, sections.firstChild);
   }
+
+  // 5. Revenue by Geography
   if (Array.isArray(rawData.Revenue_By_Geography) && rawData.Revenue_By_Geography.length > 0) {
-    const lastTopSection = sections.querySelector(".section-wrap:last-of-type") || sections.firstChild;
+    const anchor = sections.querySelector(".section-wrap:last-of-type") || sections.firstChild;
     const geoSection = buildGeographySection(rawData.Revenue_By_Geography);
-    if (lastTopSection) lastTopSection.after(geoSection);
+    if (anchor) anchor.after(geoSection);
     else sections.insertBefore(geoSection, sections.firstChild);
   }
+
+  // 6. Management Team
   if (Array.isArray(rawData.Management_Team) && rawData.Management_Team.length > 0) {
     sections.appendChild(buildManagementTeamSection(rawData.Management_Team));
   }
+
+  // 7. Growth Initiatives
   if (Array.isArray(rawData.Growth_Initiatives) && rawData.Growth_Initiatives.length > 0) {
     sections.appendChild(buildGrowthInitiativesSection(rawData.Growth_Initiatives));
   }
+
+  // 8. Market Intelligence
   if (rawData.Market_Intelligence != null) {
     sections.appendChild(buildMarketIntelligenceSection(rawData.Market_Intelligence));
   }
+
+  // 9. Investment Recommendation — always last
   if (rawData.Investment_Recommendation !== undefined) {
     sections.appendChild(buildInvestmentRecommendationSection(rawData.Investment_Recommendation));
-  }
-  if (rawData.Company_Summary !== undefined) {
-    sections.appendChild(buildCompanySummarySection(rawData.Company_Summary));
   }
 
   /* Raw JSON */
@@ -1745,7 +1782,15 @@ function buildCompanySummarySection(data) {
   wrap.innerHTML = `<div class="section-label">Company Summary</div>`;
 
   const card = document.createElement("div");
-  card.className = "summary-card";
+  card.className = "summary-section-wrap";
+
+  const inner = document.createElement("div");
+  inner.className = "summary-inner";
+
+  const eyebrow = document.createElement("div");
+  eyebrow.className = "summary-eyebrow";
+  eyebrow.textContent = "Executive Brief";
+  inner.appendChild(eyebrow);
 
   const p = document.createElement("p");
   if (data && typeof data === "string" && data.trim().length > 0) {
@@ -1755,7 +1800,8 @@ function buildCompanySummarySection(data) {
     p.className = "summary-text null";
     p.textContent = "—";
   }
-  card.appendChild(p);
+  inner.appendChild(p);
+  card.appendChild(inner);
   wrap.appendChild(card);
   return wrap;
 }

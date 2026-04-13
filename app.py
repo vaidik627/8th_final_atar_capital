@@ -30,6 +30,7 @@ PROVIDER_ENV = {
     "anthropic": "ANTHROPIC_API_KEY",
     "openai":    "OPENAI_API_KEY",
     "ollama":    "OLLAMA_API_KEY",
+    "deepseek":  "DEEPSEEK_API_KEY",
 }
 
 DEFAULT_REQ = DEFAULT_CLIENT_REQ
@@ -330,24 +331,34 @@ def api_download_excel(job_id):
 
     def _write_field(field_key, row, hist_cols=COL_HIST, proj_cols=COL_PROJ, force_negative=False):
         """
-        3-case logic (applied per-field independently):
-          Case 1 — hist + proj both present → fill directly
-          Case 2 — hist present, proj all absent → fill hist + avg of hist fills all proj slots
-          Case 3 — both absent → write nothing (leave blank)
+        Write logic (applied per-field independently):
+
+        Historical (I, J, K) — right-aligned:
+          3 actuals → I, J, K filled
+          2 actuals → I blank,    J+K filled
+          1 actual  → I+J blank,  K filled
+          0 actuals → all blank
+
+        Projection (L, M, N, O, P) — always fill all 5 slots if hist data exists:
+          Real extracted proj values fill from the left.
+          Any remaining slots (partial or zero proj) are filled with the
+          average of the 3 historical values.
+          If no hist data at all → leave proj blank.
+
         force_negative: if True, ensure all written values are negative (CAPEX).
         """
         d = raw.get(field_key)
         if not isinstance(d, dict):
-            return  # Case 3 — field not extracted at all
+            return  # field not extracted at all
 
-        actuals  = _sorted_keys(d, "_A")[-len(hist_cols):]
-        proj     = _sorted_keys(d, "_E")[:len(proj_cols)]
+        actuals = _sorted_keys(d, "_A")[-len(hist_cols):]
+        proj    = _sorted_keys(d, "_E")[:len(proj_cols)]
 
         hist_has = len(actuals) > 0
         proj_has = len(proj) > 0
 
         if not hist_has and not proj_has:
-            return  # Case 3 — all null
+            return  # nothing to write
 
         def _safe_val(v):
             if v is None:
@@ -356,26 +367,27 @@ def api_download_excel(job_id):
                 return -abs(v) if v != 0 else 0
             return v
 
-        # Write historical
+        # ── Historical — right-aligned ───────────────────────────────────────
         for i, yk in enumerate(actuals):
             col = hist_cols[len(hist_cols) - len(actuals) + i]
             ws[f"{col}{row}"] = _safe_val(d[yk])
 
-        if proj_has:
-            # Case 1 — write projected directly
-            for i, yk in enumerate(proj):
-                val = _safe_val(d.get(yk))
-                if val is not None:
-                    ws[f"{proj_cols[i]}{row}"] = val
+        # ── Projection — real data + avg fill for remainder ──────────────────
+        if hist_has:
+            hist_vals = [d[k] for k in actuals if d.get(k) is not None]
+            hist_avg  = _safe_val(round(sum(hist_vals) / len(hist_vals))) if hist_vals else None
         else:
-            # Case 2 — proj absent: fill all proj slots with hist average
-            if hist_has:
-                hist_vals = [d[k] for k in actuals if d.get(k) is not None]
-                if hist_vals:
-                    avg = round(sum(hist_vals) / len(hist_vals))
-                    avg = _safe_val(avg)
-                    for i in range(len(proj_cols)):
-                        ws[f"{proj_cols[i]}{row}"] = avg
+            hist_avg = None
+
+        for i, col in enumerate(proj_cols):
+            if i < len(proj):
+                # slot has real extracted proj data
+                val = _safe_val(d.get(proj[i]))
+                ws[f"{col}{row}"] = val if val is not None else hist_avg
+            else:
+                # no more real proj data — avg fill
+                if hist_avg is not None:
+                    ws[f"{col}{row}"] = hist_avg
 
     def _write_field_hist_only(field_key, row, hist_cols=COL_HIST):
         """
@@ -435,6 +447,10 @@ def api_download_excel(job_id):
     for col in COL_PROJ:
         ws[f"{col}13"] = None
 
+    # Clear hardcoded template values in CAPEX projection columns (L32:P32)
+    for col in COL_PROJ:
+        ws[f"{col}32"] = None
+
     # Row 7  — Net Revenue
     _write_field("Total_Revenue", 7)
 
@@ -444,8 +460,8 @@ def api_download_excel(job_id):
     # Row 13 — SG&A
     _write_field("SGA", 13)
 
-    # Row 16 — 1x Adjustments (historical only — proj is formula)
-    _write_field_hist_only("Onex_Adjustments", 16)
+    # Row 16 — 1x Adjustments (full write — hist right-aligned, proj avg-fill)
+    _write_field("Onex_Adjustments", 16)
 
     # Row 21 — Other Expense / (Income)
     _write_field("Other_Expense", 21)
