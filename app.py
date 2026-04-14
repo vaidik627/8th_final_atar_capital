@@ -152,6 +152,7 @@ def login_page():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "").strip()
         if DEMO_USERS.get(username) == password:
+            session.permanent = True
             session["user"] = username
             return redirect(url_for("dashboard"))
         error = "Invalid username or password."
